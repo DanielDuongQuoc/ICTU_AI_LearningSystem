@@ -1,0 +1,41 @@
+{
+  "ai": {
+    "ai_version_id": "env-bootstrap",
+    "config_fingerprint": "9c1f0b0651932d74b3457637a78723b3a4668b7a9837489d064b85e091ee2596",
+    "embedding_model": "nomic-embed-text",
+    "llm_model": "qwen2.5:7b",
+    "model_tags_pinned": false,
+    "prompt_versions": {
+      "answer_evaluation": "v1",
+      "question_generation": "v1",
+      "rag_answer": "v1"
+    },
+    "rag_fingerprint": "62193d5007417ddb69fa0ec5cb4999ccfcf04505f4f203bb4345b70bab4df255"
+  },
+  "application_version": "0.14.0",
+  "build": {
+    "docker_base_images": [
+      "python:3.11.9-slim",
+      "python:3.11.9-slim"
+    ],
+    "dockerfile_sha256": "74ddbe8102847225efcc994995b7ea93fddd8ce74ff94b36a8f6ae36e33a2ed3",
+    "python_version": "3.11.9",
+    "requirements_sha256": "1f823e7c1585bc9108d3b6cd8863e7433fc1251480a7eca167d73f094103bcbd"
+  },
+  "build_timestamp": "2026-10-24T11:47:49Z",
+  "environment": "development",
+  "gates": {
+    "ai_quality": "PARTIAL",
+    "docker": "PARTIAL",
+    "functional": "PASS",
+    "release_engineering": "PASS",
+    "reliability": "PASS",
+    "security": "PASS",
+    "static_checks": "PASS"
+  },
+  "git_commit": "unavailable (not a git repository or git missing)",
+  "git_dirty": null,
+  "inputs_fingerprint": "2d964faabbeb758a2acb4b76cc2e5325888e8a615ec65ab130bf34a190efbe2e",
+  "release_id": "0.14.0+2d964faabbeb",
+  "verdict": "GO WITH LIMITATIONS"
+}

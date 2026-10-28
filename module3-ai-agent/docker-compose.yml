@@ -1,0 +1,94 @@
+# ICTU_AI_LearningSystem - Module 3
+#
+#   api    - FastAPI application (port 8003)
+#   ollama - Ollama server that hosts Qwen + the embedding model (port 11434)
+#
+# Inside the compose network the API reaches Ollama at http://ollama:11434
+# (NEVER localhost - that would be the API container itself).
+#
+# Usage: see README ("Docker Setup").  Models are pulled once, manually, and live in
+# the ollama_data volume; the API never downloads models at startup.
+
+# Phase 22: container logs are written to the Docker json-file driver, which never rotates by default.
+# Cap them so logs cannot fill the disk (about 50 MB per container).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  ollama:
+    # Pin for reproducible deploys: OLLAMA_IMAGE=ollama/ollama:<tested-tag> (see docs/DEPLOYMENT.md).
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    container_name: module3_ollama
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      # Bound to the host loopback only (handy for debugging); the API uses the internal network.
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    healthcheck:
+      # Service-level check only: healthy even if no model has been pulled yet.
+      test: ["CMD", "ollama", "list"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    # GPU (optional, NVIDIA): uncomment
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: module3_api
+    restart: unless-stopped
+    logging: *default-logging
+    # Time for uvicorn to finish in-flight requests/streams on SIGTERM and close clients.
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      # API_BIND=127.0.0.1 keeps the API off the network (use behind a reverse proxy).
+      - "${API_BIND:-0.0.0.0}:8003:8003"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Values below override .env (which uses localhost for local, non-Docker runs).
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8003
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMA_PERSIST_DIRECTORY=/app/data/chroma
+      - AI_VERSIONS_DIR=/app/data/ai_versions
+    volumes:
+      - chroma_data:/app/data/chroma
+      - ai_versions_data:/app/data/ai_versions
+      - uploads_data:/app/uploads
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8003/health/live', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  ollama_data:
+  chroma_data:
+  uploads_data:
+  ai_versions_data:

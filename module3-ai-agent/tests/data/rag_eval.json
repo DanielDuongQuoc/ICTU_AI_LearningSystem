@@ -1,0 +1,37 @@
+{
+  "description": "Small self-contained RAG retrieval evaluation set. A retrieved chunk counts as relevant when its text contains one of the sample's relevant_phrases (case-insensitive) or its id is listed in relevant_chunk_ids. Phrase matching keeps the dataset independent of the random chunk ids created at indexing time.",
+  "documents": [
+    {
+      "name": "ml_basics",
+      "pages": [
+        "Machine learning is a field of artificial intelligence in which computers learn patterns from data instead of following hand-written rules. A trained model can then make predictions about new, unseen examples.",
+        "Supervised learning trains a model on labeled examples, where every input comes with the correct output. Typical supervised tasks are classification of emails as spam and regression of house prices.",
+        "Unsupervised learning works with unlabeled data and tries to discover hidden structure. Clustering with k-means groups similar customers together without any predefined categories.",
+        "Overfitting happens when a model memorizes the training data and performs poorly on new data. Regularization and cross-validation are common ways to reduce overfitting.",
+        "Neural networks consist of layers of connected neurons that transform their inputs with weights and activation functions. Backpropagation adjusts the weights by computing gradients of the loss."
+      ]
+    },
+    {
+      "name": "databases_basics",
+      "pages": [
+        "A relational database stores data in tables made of rows and columns. SQL is the standard language used to query and modify relational data.",
+        "A primary key uniquely identifies each row in a table, while a foreign key links a row to a row in another table and enforces referential integrity.",
+        "Database normalization organizes tables to reduce redundancy. The third normal form removes columns that depend on non-key attributes.",
+        "An index is a data structure such as a B-tree that speeds up lookups on a column at the cost of extra storage and slower writes.",
+        "A transaction groups several operations into one unit of work. ACID properties guarantee atomicity, consistency, isolation and durability."
+      ]
+    }
+  ],
+  "samples": [
+    {"id": "ml-1", "document": "ml_basics", "question": "What is machine learning?", "relevant_phrases": ["learn patterns from data"]},
+    {"id": "ml-2", "document": "ml_basics", "question": "What is supervised learning and which tasks use it?", "relevant_phrases": ["labeled examples"]},
+    {"id": "ml-3", "document": "ml_basics", "question": "How does k-means clustering group customers?", "relevant_phrases": ["unlabeled data"]},
+    {"id": "ml-4", "document": "ml_basics", "question": "How can overfitting be reduced?", "relevant_phrases": ["memorizes the training data"]},
+    {"id": "ml-5", "document": "ml_basics", "question": "What does backpropagation do in neural networks?", "relevant_phrases": ["layers of connected neurons"]},
+    {"id": "db-1", "document": "databases_basics", "question": "What language is used to query a relational database?", "relevant_phrases": ["rows and columns"]},
+    {"id": "db-2", "document": "databases_basics", "question": "What is the difference between a primary key and a foreign key?", "relevant_phrases": ["uniquely identifies each row"]},
+    {"id": "db-3", "document": "databases_basics", "question": "What does database normalization achieve?", "relevant_phrases": ["reduce redundancy"]},
+    {"id": "db-4", "document": "databases_basics", "question": "Why is an index such as a B-tree used?", "relevant_phrases": ["speeds up lookups"]},
+    {"id": "db-5", "document": "databases_basics", "question": "What do the ACID properties guarantee in a transaction?", "relevant_phrases": ["atomicity, consistency, isolation and durability"]}
+  ]
+}

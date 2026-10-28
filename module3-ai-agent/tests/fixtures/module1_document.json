@@ -1,0 +1,5 @@
+{
+  "_meta": "TBD - requires confirmation: Module 1 API not available. This is only what Module 3 itself needs as input for POST /api/documents/upload (multipart field file).",
+  "filename": "lecture.pdf",
+  "content_type": "application/pdf"
+}

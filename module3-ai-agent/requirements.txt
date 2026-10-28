@@ -1,0 +1,36 @@
+# ICTU_AI_LearningSystem - Module 3 AI Agent
+# Python 3.11+
+# (ASCII only: pip on Windows reads this file with the locale codec.)
+
+# Web Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# Pydantic v2
+pydantic==2.10.1
+pydantic-settings==2.6.1
+
+# PDF Processing
+PyMuPDF==1.24.13
+
+# Word (.docx) text extraction (lxml is python-docx's XML parser; pinned for reproducible builds)
+python-docx==1.1.2
+lxml==6.1.3
+
+# Vector Database
+chromadb==0.5.23
+
+# HTTP Client (Ollama calls + async test client)
+httpx==0.28.0
+
+# File Uploads
+python-multipart==0.0.32
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-mock==3.14.0
+anyio==4.15.1
+
+# Static docker-compose checks in tests
+PyYAML==6.0.3

@@ -1,0 +1,6 @@
+{
+  "_meta": "Required top-level keys of the Module 3 evaluation response.",
+  "required": ["score", "max_score", "percentage", "correct", "feedback", "strengths", "missing_points", "errors", "sources"],
+  "source_required": ["chunk_id", "score"],
+  "source_optional": ["page"]
+}

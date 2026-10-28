@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment / secrets (never commit API keys or tokens)
+.env
+.env.local
+.env.*.local
+*.secret
+*.key
+*.pem
+
+# Data / uploads (folders are kept via .gitkeep)
+data/chroma/*
+!data/chroma/.gitkeep
+data/ai_versions/*
+!data/ai_versions/.gitkeep
+uploads/*
+!uploads/.gitkeep
+
+# Benchmark / evaluation artifacts
+benchmark_results.json
+rag_eval_results.json
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+*.xml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+# Chroma backups
+backups/

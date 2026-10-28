@@ -1,0 +1,7 @@
+{
+  "_meta": "Module 3 request contract for POST /api/questions/generate (Module 2 formal contract TBD - requires confirmation).",
+  "document_id": "<filled by test>",
+  "number_of_questions": 1,
+  "difficulty": "medium",
+  "question_type": "short_answer"
+}

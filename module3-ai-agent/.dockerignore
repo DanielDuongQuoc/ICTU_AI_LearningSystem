@@ -1,0 +1,15 @@
+.venv/
+venv/
+.env
+.git/
+.pytest_cache/
+__pycache__/
+*.pyc
+data/
+uploads/
+tests/
+scripts/
+benchmark_results.json
+rag_eval_results.json
+*.log
+logs/backups/

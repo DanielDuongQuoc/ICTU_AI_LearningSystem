@@ -1,0 +1,745 @@
+{
+  "k": 5,
+  "cases": 39,
+  "sections": {
+    "Retrieval (K=5, answerable cases n=33)": {
+      "hit@5": 0.5151515151515151,
+      "precision@5": 0.10303030303030306,
+      "recall@5": 0.5151515151515151,
+      "mrr": 0.48484848484848486,
+      "ndcg@5": 0.4927836214285732,
+      "empty_retrieval_rate_answerable": 0.48484848484848486,
+      "latency_ms_mean": 3.911025641025641,
+      "latency_ms_max": 7.41
+    },
+    "Abstention / insufficient context (n=6 abstain cases)": {
+      "abstain_cases": 6,
+      "insufficient_context_detection_rate": 0.6666666666666666,
+      "unsupported_context_pass_rate": 0.3333333333333333,
+      "incorrect_abstention_rate": 0.48484848484848486
+    },
+    "Security invariants": {
+      "document_isolation_violations": 0,
+      "source_integrity_violations": 0
+    },
+    "Per category": {
+      "answerable": {
+        "n": 24,
+        "hit@5": 0.5,
+        "mrr": 0.5
+      },
+      "fabricate_source_request": {
+        "n": 1,
+        "hit@5": null,
+        "mrr": null
+      },
+      "false_premise": {
+        "n": 2,
+        "hit@5": 1.0,
+        "mrr": 1.0
+      },
+      "out_of_scope": {
+        "n": 4,
+        "hit@5": null,
+        "mrr": null
+      },
+      "outside_knowledge_request": {
+        "n": 1,
+        "hit@5": null,
+        "mrr": null
+      },
+      "paraphrased": {
+        "n": 4,
+        "hit@5": 0.25,
+        "mrr": 0.125
+      },
+      "partial": {
+        "n": 3,
+        "hit@5": 0.6666666666666666,
+        "mrr": 0.5
+      }
+    }
+  },
+  "per_case": [
+    {
+      "case_id": "rag_001",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 3.8,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_002",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 4.27,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_003",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 4.33,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_004",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 4.26,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_005",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 3.62,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_006",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_006"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 3.48,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_007",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_007"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 3.95,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_008",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 4.04,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_009",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_009"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 5.34,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_010",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_010",
+        "fixture_chunk_009"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 5.62,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_011",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 3.69,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_012",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_012"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 6.31,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_013",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 4.99,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_014",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_014"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 3.36,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_015",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_015"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 2.78,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_016",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 2.81,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_017",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_017"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 4.2,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_018",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_018"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 2.88,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_019",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 3.11,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_020",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_020"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 2.97,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_021",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 3.76,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_022",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_022"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 2.65,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_023",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_023"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 3.41,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_024",
+      "category": "answerable",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 4.57,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_025",
+      "category": "paraphrased",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_003",
+        "fixture_chunk_004"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 3.12,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 0.5,
+      "ndcg": 0.6309297535714575,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_026",
+      "category": "paraphrased",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 2.73,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_027",
+      "category": "paraphrased",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 3.6,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_028",
+      "category": "paraphrased",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 3.68,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_029",
+      "category": "partial",
+      "expect_abstain": false,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 5.1,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "ndcg": 0.0,
+      "incorrect_abstention": true
+    },
+    {
+      "case_id": "rag_030",
+      "category": "partial",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_017"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 4.56,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_031",
+      "category": "partial",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_009",
+        "fixture_chunk_010"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 5.24,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 0.5,
+      "ndcg": 0.6309297535714575,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_032",
+      "category": "false_premise",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_018"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 4.34,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_033",
+      "category": "false_premise",
+      "expect_abstain": false,
+      "retrieved": [
+        "fixture_chunk_009"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 3.36,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "hit": 1.0,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "ndcg": 1.0,
+      "incorrect_abstention": false
+    },
+    {
+      "case_id": "rag_034",
+      "category": "out_of_scope",
+      "expect_abstain": true,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 3.17,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "correct_abstention": true
+    },
+    {
+      "case_id": "rag_035",
+      "category": "out_of_scope",
+      "expect_abstain": true,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 2.38,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "correct_abstention": true
+    },
+    {
+      "case_id": "rag_036",
+      "category": "out_of_scope",
+      "expect_abstain": true,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 7.41,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "correct_abstention": true
+    },
+    {
+      "case_id": "rag_037",
+      "category": "out_of_scope",
+      "expect_abstain": true,
+      "retrieved": [
+        "fixture_chunk_006"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 2.9,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "correct_abstention": false
+    },
+    {
+      "case_id": "rag_038",
+      "category": "outside_knowledge_request",
+      "expect_abstain": true,
+      "retrieved": [],
+      "retrieval_abstained": true,
+      "latency_ms": 2.67,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "correct_abstention": true
+    },
+    {
+      "case_id": "rag_039",
+      "category": "fabricate_source_request",
+      "expect_abstain": true,
+      "retrieved": [
+        "fixture_chunk_022"
+      ],
+      "retrieval_abstained": false,
+      "latency_ms": 4.07,
+      "isolation_violations": 0,
+      "source_violations": 0,
+      "correct_abstention": false
+    }
+  ],
+  "findings": [
+    "Answer-quality metrics were not computed (needs --answers with --mode ollama)."
+  ],
+  "invariants": {
+    "document_isolation_violations": 0,
+    "source_integrity_violations": 0
+  },
+  "metrics_flat": {
+    "hit@5": 0.5151515151515151,
+    "precision@5": 0.10303030303030306,
+    "recall@5": 0.5151515151515151,
+    "mrr": 0.48484848484848486,
+    "ndcg@5": 0.4927836214285732,
+    "empty_retrieval_rate_answerable": 0.48484848484848486,
+    "latency_ms_mean": 3.911025641025641,
+    "latency_ms_max": 7.41,
+    "abstain_cases": 6,
+    "insufficient_context_detection_rate": 0.6666666666666666,
+    "unsupported_context_pass_rate": 0.3333333333333333,
+    "incorrect_abstention_rate": 0.48484848484848486
+  },
+  "metadata": {
+    "evaluation_run_id": "rag-20261023T214007Z-627c53",
+    "timestamp": "2026-10-23T21:40:07.219189+00:00",
+    "git_commit": "unavailable",
+    "dataset_version": "1.0.0",
+    "prompt_version": {
+      "rag": "v1"
+    },
+    "model_name": "scripted-test-llm",
+    "embedding_model": "lexical-test-embedding",
+    "top_k": 5,
+    "similarity_threshold": 0.3,
+    "configuration_fingerprint": "b2a56caceafea7ef",
+    "mode": "offline",
+    "evaluation_type": "deterministic_offline",
+    "human_review": "HUMAN REVIEW NOT PERFORMED",
+    "reproducibility_notes": [
+      "OFFLINE mode: lexical test embedder and a scripted (non-model) LLM. Numbers describe pipeline/harness behaviour, NOT the quality of the production model or embeddings."
+    ],
+    "label_sources": [
+      "synthetic_author"
+    ]
+  },
+  "threshold_failures": []
+}

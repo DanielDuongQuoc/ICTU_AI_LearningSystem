@@ -1,0 +1,135 @@
+{
+  "metadata": {
+    "run_id": "8c40b4c1006b",
+    "timestamp": "2026-10-24T11:53:40+00:00",
+    "git_commit": null,
+    "dataset_version": "synthetic-text-v1",
+    "embedding": "fake-hash-64",
+    "configured_llm_model": "qwen2.5:7b",
+    "configured_embedding_model": "nomic-embed-text",
+    "prompt_version": "n/a (no LLM in this benchmark)",
+    "chunk_size": 800,
+    "chunk_overlap": 150,
+    "top_k": 5,
+    "similarity_threshold": 0.0,
+    "max_context_chars": 12000,
+    "queries_per_document": 50,
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0"
+  },
+  "documents": [
+    {
+      "pages": 5,
+      "chunks": 23,
+      "pdf_bytes": 4865,
+      "pdf_extraction_ms": 12.28,
+      "chunking_ms": 32.11,
+      "embedding_ms_fake": 2.7,
+      "vector_store_ms": 52.19,
+      "retrieval_p50_ms": 2.48,
+      "retrieval_p95_ms": 4.704,
+      "retrieval_samples": 50,
+      "extract_ms_per_page": 2.457,
+      "chunks_per_page": 4.6,
+      "python_peak_kb_extract_chunk": 305.6,
+      "peak_kb_per_page": 61.1,
+      "wrong_document_hits": 0,
+      "retrieval_hits_total": 250
+    },
+    {
+      "pages": 25,
+      "chunks": 112,
+      "pdf_bytes": 23238,
+      "pdf_extraction_ms": 23.59,
+      "chunking_ms": 93.39,
+      "embedding_ms_fake": 8.54,
+      "vector_store_ms": 116.49,
+      "retrieval_p50_ms": 4.865,
+      "retrieval_p95_ms": 8.279,
+      "retrieval_samples": 50,
+      "extract_ms_per_page": 0.944,
+      "chunks_per_page": 4.48,
+      "python_peak_kb_extract_chunk": 1507.2,
+      "peak_kb_per_page": 60.3,
+      "wrong_document_hits": 0,
+      "retrieval_hits_total": 250
+    },
+    {
+      "pages": 100,
+      "chunks": 448,
+      "pdf_bytes": 92879,
+      "pdf_extraction_ms": 103.15,
+      "chunking_ms": 324.95,
+      "embedding_ms_fake": 53.5,
+      "vector_store_ms": 438.38,
+      "retrieval_p50_ms": 7.66,
+      "retrieval_p95_ms": 13.761,
+      "retrieval_samples": 50,
+      "extract_ms_per_page": 1.031,
+      "chunks_per_page": 4.48,
+      "python_peak_kb_extract_chunk": 6036.1,
+      "peak_kb_per_page": 60.4,
+      "wrong_document_hits": 0,
+      "retrieval_hits_total": 250
+    }
+  ],
+  "growth": [
+    {
+      "documents": 3,
+      "chunks": 583,
+      "storage_bytes": 5196516
+    },
+    {
+      "documents": 8,
+      "chunks": 698,
+      "storage_bytes": 6028004,
+      "retrieval_p50_ms": 2.863,
+      "retrieval_p95_ms": 5.292
+    },
+    {
+      "documents": 13,
+      "chunks": 813,
+      "storage_bytes": 7047908,
+      "retrieval_p50_ms": 2.291,
+      "retrieval_p95_ms": 3.138
+    },
+    {
+      "documents": 18,
+      "chunks": 928,
+      "storage_bytes": 7817956,
+      "retrieval_p50_ms": 5.746,
+      "retrieval_p95_ms": 7.047
+    },
+    {
+      "documents": 23,
+      "chunks": 1043,
+      "storage_bytes": 8578996,
+      "retrieval_p50_ms": 4.734,
+      "retrieval_p95_ms": 6.845
+    }
+  ],
+  "lifecycle": {
+    "delete_ms": 28.09,
+    "chunks_removed": 23,
+    "expected_removed": 23,
+    "orphans_after_delete": 0
+  },
+  "metrics": {
+    "pdf_extraction_ms@100p": {
+      "value_ms": 103.15,
+      "samples": 1
+    },
+    "chunking_ms@100p": {
+      "value_ms": 324.95,
+      "samples": 1
+    },
+    "vector_store_ms@100p": {
+      "value_ms": 438.38,
+      "samples": 1
+    },
+    "retrieval_p95_ms": {
+      "value_ms": 13.761,
+      "samples": 50
+    }
+  }
+}

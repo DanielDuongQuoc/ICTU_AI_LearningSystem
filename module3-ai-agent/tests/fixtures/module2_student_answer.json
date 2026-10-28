@@ -1,0 +1,8 @@
+{
+  "_meta": "Module 3 request contract for POST /api/evaluations/evaluate (Module 2 formal contract TBD - requires confirmation).",
+  "document_id": "<filled by test>",
+  "question": "What do zebracorn models learn from data?",
+  "student_answer": "Computers can learn patterns from examples without being explicitly programmed.",
+  "expected_answer": "Zebracorn models learn patterns from data.",
+  "max_score": 10
+}

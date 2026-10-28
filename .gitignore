@@ -1,0 +1,36 @@
+# Root .gitignore for ICTU_AI_LearningSystem
+# Environment / secrets (never commit API keys or tokens)
+.env
+**/.env
+.env.local
+**/.env.local
+.env.*.local
+**/.env.*.local
+*.secret
+**/*.secret
+*.key
+**/*.key
+*.pem
+**/*.pem
+
+# Python / Virtual environments
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.venv/
+**/.venv/
+venv/
+**/venv/
+.pytest_cache/
+**/.pytest_cache/
+.ruff_cache/
+**/.ruff_cache/
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+logs/
+

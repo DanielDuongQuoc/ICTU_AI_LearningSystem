@@ -1,0 +1,125 @@
+name: module3-ci
+
+on:
+  push:
+    paths: ["module3-ai-agent/**", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["module3-ai-agent/**", ".github/workflows/ci.yml"]
+  workflow_dispatch:
+    inputs:
+      run_ollama_quality:
+        description: "Run model-dependent AI quality evaluation (needs a self-hosted runner with Ollama)"
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    working-directory: module3-ai-agent
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: module3-ai-agent/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+      - name: Lint (real errors only - syntax, undefined names, unused imports)
+        run: ruff check --select E9,F app scripts tests
+      - name: Release checks (static)
+        run: python scripts/release_check.py
+      # Offline suite: Ollama is faked, integration tests are deselected by pytest.ini.
+      # No model is downloaded in CI; run `pytest -m integration` on a machine with Ollama.
+      - name: Tests
+        run: pytest -q
+      # Phase 17: deterministic quality checks (dataset schema, safety invariants). Offline harness
+      # reports never count as model quality: the gate says INSUFFICIENT EVIDENCE for that part.
+      - name: AI quality - datasets and deterministic gate
+        run: |
+          python scripts/evaluate_rag.py --validate-only
+          python scripts/evaluate_question_generation.py --validate-only
+          python scripts/evaluate_answer_evaluation.py --validate-only
+          python scripts/evaluate_rag.py --out-dir "$RUNNER_TEMP/ai-quality"
+          python scripts/evaluate_question_generation.py --out-dir "$RUNNER_TEMP/ai-quality"
+          python scripts/evaluate_answer_evaluation.py --out-dir "$RUNNER_TEMP/ai-quality"
+          python scripts/quality_gate.py --reports "$RUNNER_TEMP/ai-quality" --deterministic-only
+      # Phase 18: shipped prompts must match the committed fingerprints; no version is promoted in CI.
+      - name: AI governance - prompt lock and config snapshot
+        run: |
+          python -c "from app.core import prompt_registry as r; p = r.verify_lock(); print(p); raise SystemExit(1 if p else 0)"
+          python scripts/ai_version_cli.py show-env
+
+  # Opt-in only (workflow_dispatch + input). UNVERIFIED: requires a self-hosted runner labelled
+  # `ollama` with the chat and embedding models already pulled.
+  ollama-quality:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_ollama_quality
+    runs-on: [self-hosted, ollama]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Model-dependent evaluation
+        run: |
+          python scripts/evaluate_rag.py --mode ollama --answers --out-dir "$RUNNER_TEMP/ai-quality-ollama"
+          python scripts/evaluate_question_generation.py --mode ollama --out-dir "$RUNNER_TEMP/ai-quality-ollama"
+          python scripts/evaluate_answer_evaluation.py --mode ollama --out-dir "$RUNNER_TEMP/ai-quality-ollama"
+          python scripts/quality_gate.py --reports "$RUNNER_TEMP/ai-quality-ollama"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-quality-reports
+          path: ${{ runner.temp }}/ai-quality-ollama
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose file
+        run: docker compose config -q
+      - name: Build API image
+        run: docker build -t module3-api:ci .
+
+  # Phase 19: advisory dependency vulnerability scan. Needs internet (PyPI/OSV), so it is kept out of the
+  # offline `test` job and never blocks a merge (continue-on-error). Direct requirements only (--no-deps):
+  # transitive dependencies are NOT covered by this job.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: pip-audit (direct requirements)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --no-deps --disable-pip
+
+  # Phase 21: release gate aggregator. Runs every gate that can run on a runner without Ollama and uploads the
+  # manifest. Verdict BLOCKED fails the job; GO WITH LIMITATIONS passes (NOT VERIFIED gates are listed, never PASS).
+  release-validation:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: module3-ai-agent/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Validate release (all offline gates) and write manifest
+        run: python -m scripts.validate_release --manifest "$RUNNER_TEMP/release-manifest.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-manifest
+          path: ${{ runner.temp }}/release-manifest.json
+

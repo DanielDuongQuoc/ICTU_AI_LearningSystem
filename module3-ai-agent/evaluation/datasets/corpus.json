@@ -1,0 +1,50 @@
+{
+  "dataset_version": "1.0.0",
+  "provenance": "synthetic",
+  "provenance_note": "Passages were written by the project author for this evaluation. They are original, contain no personal data and no student work. Ground truth (which passage answers which query) was assigned by the author and has NOT been independently reviewed (HUMAN REVIEW NOT PERFORMED). 'document_id' values are fixture names; they are mapped to fresh UUIDs inside a temporary store at run time and never refer to production ChromaDB data.",
+  "language": "en",
+  "documents": [
+    {
+      "document_id": "fixture_doc_001",
+      "title": "Machine learning basics (synthetic)",
+      "passages": [
+        {"chunk_id": "fixture_chunk_001", "page": 1, "text": "Supervised learning trains a model on labeled examples. Each training example pairs an input with the correct output, and the model learns a mapping from inputs to outputs."},
+        {"chunk_id": "fixture_chunk_002", "page": 1, "text": "Unsupervised learning works with unlabeled data. The algorithm looks for structure such as clusters or associations without being told the correct output."},
+        {"chunk_id": "fixture_chunk_003", "page": 1, "text": "Overfitting happens when a model memorizes noise in the training data. An overfitted model scores very well on training data but poorly on new data."},
+        {"chunk_id": "fixture_chunk_004", "page": 2, "text": "Cross-validation estimates how well a model generalizes. The data is split into several folds, and each fold is used once as the validation set while the others train the model."},
+        {"chunk_id": "fixture_chunk_005", "page": 2, "text": "A decision tree classifies an example by asking a sequence of questions about its features. Each internal node tests one feature and each leaf holds a predicted class."},
+        {"chunk_id": "fixture_chunk_006", "page": 2, "text": "Gradient descent minimizes a loss function by repeatedly moving the parameters in the direction of the negative gradient. The learning rate controls the size of each step."},
+        {"chunk_id": "fixture_chunk_007", "page": 3, "text": "Reinforcement learning trains an agent through rewards and penalties. The agent interacts with an environment and learns a policy that maximizes cumulative reward."},
+        {"chunk_id": "fixture_chunk_008", "page": 3, "text": "Precision is the fraction of predicted positives that are truly positive, while recall is the fraction of actual positives that the model finds."}
+      ]
+    },
+    {
+      "document_id": "fixture_doc_002",
+      "title": "Relational databases (synthetic)",
+      "passages": [
+        {"chunk_id": "fixture_chunk_009", "page": 1, "text": "A primary key uniquely identifies each row in a relational table. A primary key value cannot be null and cannot repeat within the table."},
+        {"chunk_id": "fixture_chunk_010", "page": 1, "text": "A foreign key is a column that refers to the primary key of another table. It enforces referential integrity between the two tables."},
+        {"chunk_id": "fixture_chunk_011", "page": 1, "text": "Normalization organizes tables to reduce redundancy. Third normal form removes columns that depend on non-key attributes rather than on the key."},
+        {"chunk_id": "fixture_chunk_012", "page": 2, "text": "An index is a data structure that speeds up lookups on a column. The cost is extra storage space and slower writes because the index must be updated."},
+        {"chunk_id": "fixture_chunk_013", "page": 2, "text": "A transaction groups several operations into one unit of work. Atomicity means that either all of the operations are applied or none of them are."},
+        {"chunk_id": "fixture_chunk_014", "page": 2, "text": "Isolation levels control how concurrent transactions see each other's changes. The serializable level behaves as if transactions ran one after another."},
+        {"chunk_id": "fixture_chunk_015", "page": 3, "text": "An inner join returns only rows that have matching values in both tables. A left join keeps every row from the left table and fills missing matches with nulls."},
+        {"chunk_id": "fixture_chunk_016", "page": 3, "text": "The GROUP BY clause collects rows that share a value into groups so that aggregate functions such as COUNT and SUM can be applied to each group."}
+      ]
+    },
+    {
+      "document_id": "fixture_doc_003",
+      "title": "Computer networking (synthetic)",
+      "passages": [
+        {"chunk_id": "fixture_chunk_017", "page": 1, "text": "The TCP protocol provides reliable, ordered delivery of bytes between two hosts. It establishes a connection with a three-way handshake before sending data."},
+        {"chunk_id": "fixture_chunk_018", "page": 1, "text": "UDP sends independent datagrams without establishing a connection. It does not guarantee delivery or ordering, which keeps latency low."},
+        {"chunk_id": "fixture_chunk_019", "page": 1, "text": "DNS translates human-readable domain names into IP addresses. A resolver queries a hierarchy of name servers to find the answer."},
+        {"chunk_id": "fixture_chunk_020", "page": 2, "text": "An IP address identifies a network interface. IPv4 addresses have 32 bits, while IPv6 addresses have 128 bits."},
+        {"chunk_id": "fixture_chunk_021", "page": 2, "text": "A router forwards packets between networks using its routing table. A switch forwards frames inside one local network using MAC addresses."},
+        {"chunk_id": "fixture_chunk_022", "page": 2, "text": "HTTPS is HTTP carried over TLS. TLS encrypts the traffic and uses certificates so that a client can verify the identity of the server."},
+        {"chunk_id": "fixture_chunk_023", "page": 3, "text": "A firewall filters network traffic according to rules. Rules can allow or block packets based on source address, destination address, port, and protocol."},
+        {"chunk_id": "fixture_chunk_024", "page": 3, "text": "DHCP automatically assigns IP addresses to devices that join a network. A device receives a lease that expires unless it is renewed."}
+      ]
+    }
+  ]
+}

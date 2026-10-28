@@ -1,0 +1,4 @@
+{
+  "_meta": "Required keys of every Module 3 error body: {\"error\": {...}}.",
+  "required": ["code", "message", "request_id"]
+}
