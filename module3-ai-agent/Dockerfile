@@ -24,6 +24,7 @@ LABEL description="ICTU AI Learning System - Module 3 (RAG, question generation,
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    ANONYMIZED_TELEMETRY=FALSE \
     PATH="/opt/venv/bin:$PATH" \
     APP_HOST=0.0.0.0 \
     APP_PORT=8003 \
@@ -46,7 +47,7 @@ EXPOSE 8003
 # /health always answers 200 (status "degraded" when Ollama/Chroma is down), so a missing
 # model never makes the container unhealthy.  Python is used so curl is not required.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD ["python", "-c", "import os,urllib.request as u; u.urlopen('http://127.0.0.1:%s/health/live' % os.environ.get('APP_PORT','8003'), timeout=5)"]
+    CMD ["python", "-c", "import os,urllib.request as u; p=os.environ.get('PORT') or os.environ.get('APP_PORT','8003'); u.urlopen('http://127.0.0.1:%s/health/live' % p, timeout=5)"]
 
-# OLLAMA_BASE_URL (and every other setting) comes from the environment at run time.
-CMD ["sh", "-c", "exec uvicorn app.main:app --host ${APP_HOST} --port ${APP_PORT}"]
+# Bind to cloud platform $PORT when provided (e.g. Render), falling back to $APP_PORT (8003).
+CMD ["sh", "-c", "exec uvicorn app.main:app --host ${APP_HOST} --port ${PORT:-${APP_PORT}}"]

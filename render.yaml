@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: ictu-ai-module3
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./module3-ai-agent/Dockerfile
+    dockerContext: ./module3-ai-agent
+    healthCheckPath: /health/live
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_EMBEDDING_MODEL
+        value: gemini-embedding-001
+      - key: OLLAMA_MODEL
+        value: qwen2.5:7b
+      - key: OLLAMA_EMBEDDING_MODEL
+        value: nomic-embed-text:v1.5
+      - key: MIN_FREE_DISK_MB
+        value: "10"
