@@ -1,6 +1,7 @@
 # ICTU_AI_LearningSystem - Module 3 (AI Agent)
 # Multi-stage build: compilers stay in the builder, the runtime image is slim
 # and runs as a non-root user.  No .env / secrets are copied into the image.
+# Works seamlessly whether Docker build context is repo root (.) or ./module3-ai-agent.
 
 # ---- builder ---------------------------------------------------------
 FROM python:3.11.9-slim AS builder
@@ -14,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
+COPY requirements.tx[t] module3-ai-agent/requirements.tx[t] ./
 RUN pip install -r requirements.txt
 
 # ---- runtime ---------------------------------------------------------
@@ -38,7 +39,7 @@ RUN groupadd --system --gid 10001 app \
     && chown -R app:app /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=app:app app/ ./app/
+COPY --chown=app:app ap[p] module3-ai-agent/ap[p] ./app/
 
 USER app
 
