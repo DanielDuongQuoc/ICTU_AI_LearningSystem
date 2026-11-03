@@ -1,8 +1,8 @@
-"""Basic, deterministic RAG retrieval evaluation (Hit@K, Precision@K, Recall@K).
+"""Deterministic RAG retrieval evaluation (Hit@K, Precision@K, Recall@K).
 
-Flow: load dataset -> index its corpus (real embeddings + a throw-away ChromaDB) -> send each
-question to ``RAGService.retrieve`` -> compare retrieved chunk ids with the ground truth ->
-average the metrics.  No LLM is involved.
+Flow: load dataset -> index its corpus into a throw-away ChromaDB -> send each question to
+``RAGService.retrieve`` -> compare retrieved chunk ids with the ground truth -> average the metrics.
+No LLM is involved.
 
 Dataset format (see ``tests/data/rag_eval.json``)::
 
@@ -10,25 +10,19 @@ Dataset format (see ``tests/data/rag_eval.json``)::
      "samples":   [{"id": "q1", "document": "doc1", "question": "...",
                     "relevant_phrases": ["..."]}]}
 
-Ground truth for a sample = chunks of its document whose text contains one of
-``relevant_phrases`` (case-insensitive)  UNION  ids in ``relevant_chunk_ids``.  A sample can
-instead point at an already indexed document with ``"document_id"`` + ``relevant_chunk_ids``
-(use ``--use-app-store`` to read the application's own ChromaDB).
+Ground truth for a sample = chunks of its document whose text contains one of ``relevant_phrases``
+(case-insensitive)  UNION  ids in ``relevant_chunk_ids``.  A sample can instead point at an already
+indexed document with ``"document_id"`` + ``relevant_chunk_ids`` (use ``--use-app-store``).
 
 Usage::
 
-    python scripts/evaluate_rag.py [--dataset tests/data/rag_eval.json] [--k 5] [--output rag_eval_results.json]
+    python scripts/evaluate_rag.py [--mode offline|gemini] [--dataset PATH] [--k 5] [--output report.json]
+    python scripts/evaluate_rag.py --validate-only
 
-Gemini mode requires GEMINI_API_KEY (the app's real configuration is used).
-
-Phase 17 suite (a ``.jsonl`` dataset - the default; implemented in ``scripts/rag_quality.py``)::
-
-    python scripts/evaluate_rag.py [--mode offline|gemini] [--k 5] [--out-dir evaluation/reports]
-                                   [--answers] [--min hit@5=0.9 ...] [--validate-only]
-
-``--mode offline`` (default) uses a lexical test embedder and never calls a model: it measures the
-retrieval pipeline (document filtering, thresholding, metadata), not production embedding quality.
-Exit codes: 0 ok, 1 evaluation failure, 2 dataset invalid, 3 requested threshold not met.
+``--mode offline`` (default) uses a deterministic lexical test embedder and never calls the network: it
+measures the retrieval pipeline (chunking, document filtering, thresholding), not embedding quality.
+``--mode gemini`` uses the real Gemini embedding model (needs GEMINI_API_KEY, consumes quota).
+Exit codes: 0 ok, 1 evaluation failure, 2 dataset invalid.
 """
 
 from __future__ import annotations
@@ -54,7 +48,6 @@ from app.services.vector_service import VectorService  # noqa: E402
 from app.utils.rag_metrics import average, score_sample  # noqa: E402
 
 DEFAULT_DATASET = ROOT / "tests" / "data" / "rag_eval.json"
-DEFAULT_JSONL_DATASET = ROOT / "evaluation" / "datasets" / "rag_eval.jsonl"
 
 
 # -- dataset ------------------------------------------------------------
@@ -132,28 +125,34 @@ async def evaluate(
         retrieved = [c["chunk_id"] for c in result["chunks"]]
         score = score_sample(retrieved, relevant, k)
         scores.append(score)
-        per_sample.append({
-            "id": sample.get("id"), "retrieved": len(retrieved),
-            "relevant": len(relevant), **score,
-        })
-    return {"samples": len(scores), "skipped": skipped, "k": k,
-            "metrics": average(scores), "per_sample": per_sample}
+        per_sample.append({"id": sample.get("id"), "retrieved": len(retrieved), "relevant": len(relevant), **score})
+    return {"samples": len(scores), "skipped": skipped, "k": k, "metrics": average(scores), "per_sample": per_sample}
 
 
 def format_report(report: dict[str, Any]) -> str:
     k, m = report["k"], report["metrics"]
-    lines = [
+    return "\n".join([
         "RAG Evaluation",
+        f"Mode: {report.get('mode', 'offline')}",
         f"Samples: {report['samples']}" + (f" (skipped: {report['skipped']})" if report["skipped"] else ""),
         f"K: {k}",
         f"Hit@{k}: {m['hit']:.2f}",
         f"Precision@{k}: {m['precision']:.2f}",
         f"Recall@{k}: {m['recall']:.2f}",
-    ]
-    return "\n".join(lines)
+    ])
 
 
 # -- CLI ----------------------------------------------------------------
+
+
+def _embedding(mode: str) -> Any:
+    if mode == "gemini":
+        from app.services.embedding_service import GeminiEmbeddingService
+
+        return GeminiEmbeddingService()
+    from tests.fakes import LexicalEmbedding
+
+    return LexicalEmbedding()
 
 
 async def _run(args: argparse.Namespace) -> dict[str, Any]:
@@ -162,11 +161,10 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
 
     from app.core.config import get_settings
     from app.repositories.chroma_repository import ChromaRepository, init_chroma
-    from app.services.embedding_service import GeminiEmbeddingService
 
     dataset = load_dataset(args.dataset)
     k = args.k or get_settings().top_k
-    embedding = GeminiEmbeddingService()
+    embedding = _embedding(args.mode)
     tmp_dir: Optional[str] = None
     try:
         if args.use_app_store:
@@ -174,15 +172,14 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             repo = ChromaRepository()
         else:
             tmp_dir = tempfile.mkdtemp(prefix="rag_eval_")
-            client = chromadb.PersistentClient(
-                path=tmp_dir, settings=ChromaSettings(anonymized_telemetry=False)
-            )
+            client = chromadb.PersistentClient(path=tmp_dir, settings=ChromaSettings(anonymized_telemetry=False))
             repo = ChromaRepository(client=client, collection_name="rag_eval")
-        rag = RAGService(embedding_service=embedding, chroma_repo=repo)
+        threshold = 0.0 if args.mode == "offline" else None   # lexical scores are not calibrated like real ones
+        rag = RAGService(embedding_service=embedding, chroma_repo=repo, similarity_threshold=threshold)
         corpus: dict[str, dict[str, Any]] = {}
         if dataset.get("documents"):
             corpus = await ingest_corpus(dataset, VectorService(embedding_service=embedding, chroma_repo=repo))
-        return await evaluate(dataset, rag, corpus, k)
+        return {"mode": args.mode, **await evaluate(dataset, rag, corpus, k)}
     finally:
         await embedding.close()
         if tmp_dir:
@@ -191,27 +188,22 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate RAG retrieval quality (Hit/Precision/Recall@K).")
-    parser.add_argument("--dataset", default=str(DEFAULT_JSONL_DATASET),
-                        help=".jsonl = Phase 17 suite (default); .json = legacy Phase 10 dataset "
-                             f"(e.g. {DEFAULT_DATASET})")
-    parser.add_argument("--k", type=int, default=None, help="Top-K (default: TOP_K from config)")
-    parser.add_argument("--output", default=None, help="Legacy (.json dataset): write the report as JSON")
-    parser.add_argument("--use-app-store", action="store_true",
-                        help="Legacy (.json dataset): use the application's ChromaDB instead of a temporary one")
+    parser.add_argument("--dataset", default=str(DEFAULT_DATASET))
     parser.add_argument("--mode", choices=["offline", "gemini"], default="offline")
-    parser.add_argument("--out-dir", default=str(ROOT / "evaluation" / "reports"),
-                        help="Phase 17: where JSON/Markdown reports are written (never overwritten)")
-    parser.add_argument("--answers", action="store_true", help="Phase 17: also generate/score answers (gemini mode)")
-    parser.add_argument("--min", action="append", metavar="METRIC=VALUE",
-                        help="Phase 17: exit 3 if a metric is below VALUE (repeatable)")
-    parser.add_argument("--validate-only", action="store_true", help="Phase 17: only validate the dataset")
-    parser.add_argument("--threshold", type=float, default=None,
-                        help="Phase 17: override SIMILARITY_THRESHOLD for this run (recorded in the report)")
+    parser.add_argument("--k", type=int, default=None, help="Top-K (default: TOP_K from config)")
+    parser.add_argument("--output", default=None, help="Write the report as JSON")
+    parser.add_argument("--use-app-store", action="store_true",
+                        help="Use the application's ChromaDB instead of a temporary one")
+    parser.add_argument("--validate-only", action="store_true", help="Only validate the dataset")
     args = parser.parse_args(argv)
-    if str(args.dataset).endswith(".jsonl"):
-        from scripts.rag_quality import main_jsonl
-
-        return main_jsonl(args)
+    try:
+        dataset = load_dataset(args.dataset)
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"Invalid dataset: {exc}", file=sys.stderr)
+        return 2
+    if args.validate_only:
+        print(f"Dataset OK: {len(dataset['samples'])} samples, {len(dataset.get('documents', []))} documents")
+        return 0
     try:
         report = asyncio.run(_run(args))
     except Exception as exc:  # operator-facing CLI: concise message, no traceback
@@ -226,4 +218,3 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -51,8 +51,6 @@ class Settings(BaseSettings):
     embedding_batch_size: int = Field(64)
     max_concurrent_embeddings: int = Field(4)
     embedding_queue_timeout_s: float = Field(30.0)
-    # Allowed p95 slowdown versus a baseline before scripts/perf_regression.py reports PERFORMANCE REGRESSION.
-    performance_regression_threshold_percent: float = Field(20.0)
 
     # Exam matrix: maximum total number of questions in one /api/questions/generate-matrix request.
     max_matrix_questions: int = Field(50)
@@ -228,8 +226,6 @@ class Settings(BaseSettings):
             errors.append("EMBEDDING_QUEUE_TIMEOUT_S must be > 0")
         if self.max_matrix_questions <= 0:
             errors.append("MAX_MATRIX_QUESTIONS must be > 0")
-        if self.performance_regression_threshold_percent <= 0:
-            errors.append("PERFORMANCE_REGRESSION_THRESHOLD_PERCENT must be > 0")
         if self.log_level.strip() and self.log_level.strip().upper() not in {
             "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
         }:

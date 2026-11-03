@@ -223,7 +223,7 @@ async def test_smoke_flow_passes_against_fakes(monkeypatch):
         results = await smoke_test.run_smoke(client, require_ready=False)
     failed = [r for r in results if not r[1]]
     assert not failed, failed
-    assert [r[0] for r in results] == ["health", "ready", "upload", "get", "retrieve", "questions",
+    assert [r[0] for r in results] == ["health", "ready", "upload", "get", "retrieve", "answer", "questions",
                                        "evaluate", "stream", "delete", "verify_deleted"]
 
 

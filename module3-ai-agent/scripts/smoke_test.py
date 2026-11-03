@@ -1,12 +1,11 @@
-"""Production smoke test for a running Module 3 (or an in-process ASGI client in tests).
+"""Smoke test for a running Module 3 (or an in-process ASGI client in tests).
 
     python scripts/smoke_test.py [--base-url http://localhost:8003]
 
-Flow: health -> ready -> upload -> get -> retrieve -> generate question -> evaluate ->
-stream evaluation -> delete -> verify deletion. Uses a generated sample PDF. It needs a live
-the Gemini API (question generation / evaluation call the model), so it is NOT part of ``pytest``; the
-offline suite runs the same steps against fakes via ``run_smoke``.
-Module 1 / Module 2 are not involved (their contracts are unconfirmed): this is a Module 3 smoke test.
+Flow: health -> ready -> upload -> get -> retrieve -> RAG answer -> generate 1 question -> evaluate ->
+stream evaluation -> delete -> verify deletion. Uses a tiny generated PDF. Against a real deployment it makes
+a handful of small Gemini calls (embeddings + ~4 generations), so it is NOT part of ``pytest``; the offline
+suite runs the same steps against fakes via ``run_smoke``.
 """
 
 from __future__ import annotations
@@ -84,6 +83,12 @@ async def run_smoke(client: httpx.AsyncClient, *, require_ready: bool = True) ->
             body = r.json() if r.status_code == 200 else {}
             record("retrieve", r.status_code == 200 and bool(body.get("chunks"))
                    and all(c["document_id"] == doc for c in body["chunks"]), f"HTTP {r.status_code}")
+
+        r = await step("answer", client.post("/api/rag/answer", json={"document_id": doc, "question": QUESTION}))
+        if r is not None:
+            body = r.json() if r.status_code == 200 else {}
+            record("answer", r.status_code == 200 and bool(body.get("answer"))
+                   and all(s["document_id"] == doc for s in body.get("sources", [])), f"HTTP {r.status_code}")
 
         r = await step("questions", client.post("/api/questions/generate",
                                                 json={"document_id": doc, "number_of_questions": 1}))

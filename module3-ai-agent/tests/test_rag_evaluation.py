@@ -128,3 +128,20 @@ async def test_ground_truth_resolution_uses_chunk_text():
     assert ids
     other = relevant_chunk_ids(sample, corpus["databases_basics"]["chunks"])
     assert not other  # phrases of one document never match another document's chunks
+
+
+# -- CLI ----------------------------------------------------------------
+
+
+def test_cli_validate_only_offline_run_and_bad_dataset(tmp_path, capsys):
+    from scripts import evaluate_rag
+
+    assert evaluate_rag.main(["--validate-only"]) == 0
+    out = tmp_path / "report.json"
+    assert evaluate_rag.main(["--mode", "offline", "--k", "3", "--output", str(out)]) == 0
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["mode"] == "offline" and report["samples"] >= 5 and report["metrics"]["hit"] >= 0.7
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"samples": []}), encoding="utf-8")
+    assert evaluate_rag.main(["--dataset", str(bad)]) == 2
+    assert "Hit@3:" in capsys.readouterr().out

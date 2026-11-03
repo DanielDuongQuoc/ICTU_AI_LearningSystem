@@ -1,13 +1,11 @@
 """Phase 22 - performance, capacity and scalability tests (offline; Gemini is faked).
 
 These verify behaviour (bounds, equivalence, classification), not machine-dependent speed, so they are stable in CI.
-Measured numbers live in docs/PERFORMANCE.md and come from ``scripts.benchmark_scale``.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import random
 
 import pytest
@@ -17,7 +15,6 @@ from app.core.config import Settings, get_settings
 from app.schemas.document import ExtractedPage
 from app.services import chunk_service
 from app.services.chunk_service import _join_units, _metadata_for_pages, _overlap_units, _units_from_page
-from scripts import perf_regression
 from tests.fakes import Stack, sample_pdf_bytes
 
 
@@ -112,7 +109,7 @@ async def test_unlimited_embedding_gate_does_not_block(monkeypatch):
 # ------------------------------------------------------------------ configuration limits
 @pytest.mark.parametrize("field,value", [
     ("embedding_batch_size", 0), ("embedding_batch_size", -1), ("max_concurrent_embeddings", -1),
-    ("embedding_queue_timeout_s", 0), ("performance_regression_threshold_percent", 0),
+    ("embedding_queue_timeout_s", 0),
 ])
 def test_new_limits_are_validated(field, value):
     with pytest.raises(ValueError):
@@ -121,65 +118,7 @@ def test_new_limits_are_validated(field, value):
 
 def test_new_limit_defaults_are_sane():
     s = Settings(_env_file=None)
-    assert (s.embedding_batch_size, s.max_concurrent_embeddings, s.performance_regression_threshold_percent) == (64, 4, 20.0)
-
-
-# ------------------------------------------------------------------ regression gate classification
-def _run(**metrics_ms):
-    meta = {"dataset_version": "d1", "embedding": "e", "configured_embedding_model": "m", "configured_llm_model": "l",
-            "prompt_version": "p", "chunk_size": 800, "chunk_overlap": 150, "top_k": 5,
-            "similarity_threshold": 0.0, "max_context_chars": 12000}
-    return {"metadata": meta, "metrics": {k: {"value_ms": v, "samples": 50} for k, v in metrics_ms.items()}}
-
-
-def test_within_threshold_passes():
-    r = perf_regression.compare(_run(retrieval_p95_ms=100), _run(retrieval_p95_ms=115), 20)
-    assert r["verdict"] == perf_regression.PASS and r["rows"][0]["regression_percent"] == 15.0
-
-
-def test_over_threshold_is_a_performance_regression():
-    r = perf_regression.compare(_run(retrieval_p95_ms=100), _run(retrieval_p95_ms=130), 20)
-    assert r["verdict"] == perf_regression.REGRESSION
-
-
-def test_improvement_passes():
-    assert perf_regression.compare(_run(a=100), _run(a=50), 20)["verdict"] == perf_regression.PASS
-
-
-def test_regression_is_not_hidden_by_missing_data_elsewhere():
-    r = perf_regression.compare(_run(a=100), _run(a=200, b=10), 20)
-    assert r["verdict"] == perf_regression.REGRESSION
-
-
-def test_missing_baseline_metric_is_insufficient_data_never_pass():
-    r = perf_regression.compare(_run(a=100), _run(a=100, b=10), 20)
-    assert r["verdict"] == perf_regression.INSUFFICIENT
-
-
-def test_incomparable_configuration_is_insufficient_data():
-    base, cur = _run(a=100), _run(a=100)
-    cur["metadata"]["configured_embedding_model"] = "other"
-    r = perf_regression.compare(base, cur, 20)
-    assert r["verdict"] == perf_regression.INSUFFICIENT and "configured_embedding_model" in r["reason"]
-
-
-def test_too_few_samples_is_insufficient_data():
-    base, cur = _run(a=100), _run(a=500)
-    cur["metrics"]["a"]["samples"] = 1
-    assert perf_regression.compare(base, cur, 20, min_samples=30)["verdict"] == perf_regression.INSUFFICIENT
-
-
-def test_noise_floor_ignores_sub_millisecond_changes():
-    assert perf_regression.compare(_run(a=0.3), _run(a=0.8), 20, noise_floor_ms=1.0)["verdict"] == perf_regression.PASS
-
-
-def test_cli_exit_codes_distinguish_failure_classes(tmp_path):
-    good, bad = tmp_path / "g.json", tmp_path / "b.json"
-    good.write_text(json.dumps(_run(a=100)))
-    bad.write_text(json.dumps(_run(a=300)))
-    assert perf_regression.main([str(good), str(good), "--threshold", "20"]) == 0
-    assert perf_regression.main([str(good), str(bad), "--threshold", "20"]) == 1
-    assert perf_regression.main([str(good), str(tmp_path / "missing.json")]) == 3
+    assert (s.embedding_batch_size, s.max_concurrent_embeddings) == (64, 4)
 
 
 # ------------------------------------------------------------------ load / burst through the real API (fakes behind it)

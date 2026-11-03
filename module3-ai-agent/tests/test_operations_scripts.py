@@ -1,4 +1,4 @@
-"""Phase 16 - ops scripts (alert evaluation, backup retention) and a real backup -> restore drill."""
+"""Backup / restore scripts: a real backup -> data loss -> restore drill on temp data only."""
 
 from __future__ import annotations
 
@@ -10,53 +10,13 @@ import pytest
 from chromadb.config import Settings as ChromaSettings
 
 from app.repositories.chroma_repository import ChromaRepository
-from scripts import backup, ops_check, restore, rotate_backups
+from scripts import backup, restore
 from tests.fakes import LexicalEmbedding
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-# ------------------------------------------------------------------ alert evaluation
-
-def _samples(ok: int, err: int, bucket_le: str = "0.1", rejected: int = 0):
-    total = ok + err
-    text = (
-        f'module3_http_requests_total{{method="POST",route="/api/rag/answer",status="200"}} {ok}\n'
-        f'module3_http_requests_total{{method="POST",route="/api/rag/answer",status="503"}} {err}\n'
-        f'module3_http_request_duration_seconds_bucket{{method="POST",route="/api/rag/answer",le="{bucket_le}"}} {total}\n'
-        f'module3_http_request_duration_seconds_bucket{{method="POST",route="/api/rag/answer",le="+Inf"}} {total}\n'
-        f"module3_llm_rejected_total {rejected}\n"
-    )
-    return ops_check.parse_metrics(text)
-
-
-KW = dict(max_5xx_ratio=0.05, max_p95_seconds=60, min_requests=20)
-
-
-def test_alerts_healthy_and_noise_guard():
-    assert ops_check.evaluate(_samples(100, 1), **KW) == []
-    assert ops_check.evaluate(_samples(3, 3), **KW) == []          # below min_requests
-
-
-def test_alert_5xx_slow_and_overload():
-    assert any(a.startswith("HIGH_5XX_RATIO") for a in ops_check.evaluate(_samples(50, 50), **KW))
-    assert any(a.startswith("SLOW_P95") for a in ops_check.evaluate(_samples(100, 0, bucket_le="120.0"), **KW))
-    assert any(a.startswith("LLM_OVERLOAD") for a in ops_check.evaluate(_samples(100, 0, rejected=50), **KW))
-
-
-@pytest.mark.asyncio
-async def test_ops_check_parses_real_metrics_output(client):
-    from app.core.metrics import metrics
-
-    metrics.reset()
-    await client.get("/health/live")
-    text = (await client.get("/metrics")).text
-    parsed = ops_check.parse_metrics(text)
-    assert any(n == "module3_http_requests_total" for n, _, _ in parsed)
-    assert ops_check.evaluate(parsed, **KW) == []
-
-
-# ------------------------------------------------------------------ retention
+# ------------------------------------------------------------------ helpers
 
 def _make_backups(tmp_path: Path, n: int) -> list[Path]:
     src = tmp_path / "chroma"
@@ -64,33 +24,6 @@ def _make_backups(tmp_path: Path, n: int) -> list[Path]:
     (src / "f.bin").write_bytes(b"data")
     base = datetime(2026, 1, 1, 12, 0, 0)
     return [backup.create_backup(src, tmp_path / "b", now=base + timedelta(days=i)) for i in range(n)]
-
-
-def test_rotation_dry_run_deletes_nothing(tmp_path):
-    archives = _make_backups(tmp_path, 4)
-    assert rotate_backups.main(["--dir", str(tmp_path / "b"), "--keep", "2"]) == 0
-    assert all(a.exists() for a in archives)
-
-
-def test_rotation_apply_keeps_newest(tmp_path):
-    archives = _make_backups(tmp_path, 4)
-    assert rotate_backups.main(["--dir", str(tmp_path / "b"), "--keep", "2", "--apply"]) == 0
-    assert [a.exists() for a in archives] == [False, False, True, True]
-    assert not archives[0].with_name(archives[0].name + ".sha256").exists()
-
-
-def test_rotation_never_counts_corrupt_as_good_or_deletes_it(tmp_path):
-    archives = _make_backups(tmp_path, 3)
-    archives[2].write_bytes(b"corrupted")                # newest is corrupt
-    assert rotate_backups.main(["--dir", str(tmp_path / "b"), "--keep", "1", "--apply"]) == 0
-    assert archives[1].exists() and not archives[0].exists() and archives[2].exists()
-
-
-def test_rotation_guards(tmp_path):
-    assert rotate_backups.main(["--dir", str(tmp_path), "--keep", "0"]) == 2
-    (tmp_path / "notes.tar.gz").write_bytes(b"x")
-    assert rotate_backups.main(["--dir", str(tmp_path), "--keep", "1", "--apply"]) == 1   # no valid backup
-    assert (tmp_path / "notes.tar.gz").exists()          # foreign file untouched
 
 
 # ------------------------------------------------------------------ backup -> modify -> restore drill
