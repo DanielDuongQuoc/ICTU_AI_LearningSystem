@@ -41,7 +41,7 @@ Every response carries `X-Request-ID` (echoes a valid client value matching
 `POST /api/documents/upload` (multipart, field `file`, max `MAX_UPLOAD_SIZE_MB`, default 30 MB):
 
 ```json
-{"document_id": "<uuid4>", "filename": "lecture.pdf", "pages": 12, "chunks": 34, "status": "processed"}
+{"document_id": "<uuid4>", "filename": "lecture.pdf", "pages": 12, "chunks": 34, "status": "indexed"}
 ```
 
 - Module 3 generates `document_id`; it does not accept a caller-supplied id. The caller must store it.
