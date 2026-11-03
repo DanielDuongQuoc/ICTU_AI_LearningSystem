@@ -1,8 +1,10 @@
-"""Offline stand-ins used by the Phase 10 tests (no Ollama needed).
+"""Offline stand-ins for the Gemini API (no test may reach the real network).
 
 * :class:`LexicalEmbedding` - deterministic hashed bag-of-words embedder, so real ChromaDB
   retrieval still ranks lexically similar chunks first.
 * :class:`ScriptedLLM`     - answers every LLM entry point with schema-valid, document-grounded JSON.
+* ``gemini_*`` helpers     - real :class:`GeminiLLMService` / :class:`GeminiEmbeddingService` instances
+  wired to an ``httpx.MockTransport`` plus builders for Gemini-shaped responses.
 """
 
 from __future__ import annotations
@@ -16,8 +18,58 @@ from typing import Any, AsyncIterator, Optional
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 
+import httpx
+
 from app.repositories.chroma_repository import ChromaRepository
-from app.services.llm_service import LLMService
+from app.services.embedding_service import GeminiEmbeddingService
+from app.services.llm_service import GeminiLLMService, LLMService
+
+GEMINI_TEST_URL = "http://gemini.test/v1beta"
+GEMINI_TEST_KEY = "test-gemini-key-not-real"
+
+
+def gemini_body(text: str, *, thought: str | None = None) -> dict[str, Any]:
+    """A ``generateContent`` response body carrying ``text`` (optionally preceded by a thought part)."""
+    parts: list[dict[str, Any]] = [{"text": thought, "thought": True}] if thought else []
+    parts.append({"text": text})
+    return {"candidates": [{"content": {"role": "model", "parts": parts}, "finishReason": "STOP"}]}
+
+
+def gemini_ok(text: str = "ok") -> httpx.Response:
+    return httpx.Response(200, json=gemini_body(text))
+
+
+def gemini_sse(*texts: str, done: bool = False) -> bytes:
+    """``streamGenerateContent?alt=sse`` body: one ``data:`` frame per text piece."""
+    frames = [f"data: {json.dumps(gemini_body(t))}\r\n\r\n" for t in texts]
+    if done:
+        frames.append("data: [DONE]\r\n\r\n")
+    return "".join(frames).encode()
+
+
+def gemini_llm(handler: Any, *, model: str = "gemini-test", backoff: float = 0.0, **kw: Any) -> GeminiLLMService:
+    """Real GeminiLLMService talking to ``handler`` through httpx.MockTransport (never the network)."""
+    svc = GeminiLLMService(api_key=kw.pop("api_key", GEMINI_TEST_KEY), base_url=GEMINI_TEST_URL, model=model, **kw)
+    svc._retry_backoff_s = backoff
+    svc._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url=GEMINI_TEST_URL,
+                                    headers={"x-goog-api-key": svc._api_key} if svc._api_key else {})
+    return svc
+
+
+def gemini_embeddings_body(vectors: list[list[float]]) -> dict[str, Any]:
+    return {"embeddings": [{"values": v} for v in vectors]}
+
+
+def gemini_embedding(handler: Any, *, model: str = "embed-test", api_key: str = GEMINI_TEST_KEY) -> GeminiEmbeddingService:
+    """Real GeminiEmbeddingService talking to ``handler`` through httpx.MockTransport."""
+    svc = GeminiEmbeddingService(api_key=api_key, base_url=GEMINI_TEST_URL, model=model)
+    svc._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url=GEMINI_TEST_URL)
+    return svc
+
+
+def embed_request_texts(request: httpx.Request) -> list[str]:
+    """Texts of a ``batchEmbedContents`` request (in order)."""
+    return [r["content"]["parts"][0]["text"] for r in json.loads(request.content)["requests"]]
 
 _WORD = re.compile(r"[a-z0-9]+")
 DIM = 512

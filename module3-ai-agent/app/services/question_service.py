@@ -362,7 +362,7 @@ class QuestionGenerationService:
             context, number_of_questions, difficulty, question_type
         )
         for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
-            # AppErrors (Ollama down, LLM_INVALID_JSON, empty response...) propagate as-is.
+            # AppErrors (provider down, LLM_INVALID_JSON, empty response...) propagate as-is.
             raw = await self._llm.generate_json(
                 system_prompt, user_prompt, required_keys=["questions"]
             )

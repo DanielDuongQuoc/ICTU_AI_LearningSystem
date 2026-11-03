@@ -33,7 +33,7 @@ def _chunks():
 def wired(monkeypatch):
     """Readiness check pointed at the Stack's in-memory collection, configured model = lexical-test-embedding."""
     stack = Stack()
-    monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "lexical-test-embedding")
+    monkeypatch.setenv("GEMINI_EMBEDDING_MODEL", "lexical-test-embedding")
     monkeypatch.setenv("CHROMA_COLLECTION_NAME", stack.repo._collection_name)
     get_settings.cache_clear()
     monkeypatch.setattr(chroma_repository, "get_chroma_client", lambda: stack.repo._client)
@@ -68,11 +68,11 @@ async def test_readiness_detects_model_change_after_release(wired, client, monke
     async def up() -> bool:
         return True
 
-    monkeypatch.setattr("app.api.health.check_ollama_health", up)
+    monkeypatch.setattr("app.api.health.check_provider_health", up)
     monkeypatch.setattr("app.api.health.check_chroma_health", lambda: True)
     assert (await client.get("/ready")).status_code == 200
 
-    monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:v1.5")      # "new release" with another model
+    monkeypatch.setenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")      # "new release" with another model
     get_settings.cache_clear()
     r = await client.get("/ready")
     assert r.status_code == 503 and r.json()["services"]["embedding_index"] == "error"

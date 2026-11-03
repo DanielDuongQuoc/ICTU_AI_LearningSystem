@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from app.repositories.chroma_repository import check_chroma_health, check_embedding_compat
-from app.services.ollama_checker import check_model_health, check_ollama_health
+from app.services.provider_checker import check_model_health, check_provider_health
 from app.schemas.common import HealthCheckResponse
 from app.core.openapi import error_responses
 
@@ -45,9 +45,9 @@ def check_storage_health() -> bool:
 
 async def _collect() -> HealthCheckResponse:
     chroma_ok = await _safe(check_chroma_health, is_async=False)
-    ollama_ok = await _safe(check_ollama_health, is_async=True)
-    # The model can only be available if Ollama is reachable.
-    model_ok = ollama_ok and await _safe(check_model_health, is_async=True)
+    provider_ok = await _safe(check_provider_health, is_async=True)
+    # The model can only be available if the provider (Gemini API) is reachable.
+    model_ok = provider_ok and await _safe(check_model_health, is_async=True)
 
     storage_ok = await _safe(check_storage_health, is_async=False)
     embedding_index_ok = await _safe(check_embedding_compat, is_async=False)
@@ -55,20 +55,23 @@ async def _collect() -> HealthCheckResponse:
     def label(ok: bool) -> str:
         return "ok" if ok else "error"
 
-    overall = "ok" if (ollama_ok and chroma_ok and model_ok and storage_ok and embedding_index_ok) else "degraded"
+    overall = "ok" if (provider_ok and chroma_ok and model_ok and storage_ok and embedding_index_ok) else "degraded"
     if overall == "degraded":
         logger.warning(
-            "Health degraded: ollama=%s model=%s chromadb=%s storage=%s", ollama_ok, model_ok, chroma_ok, storage_ok
+            "Health degraded: llm_provider=%s model=%s chromadb=%s storage=%s", provider_ok, model_ok, chroma_ok, storage_ok
         )
+    # LEGACY NAMES: the "ollama" field and services["ollama"] predate the move to Gemini. They are kept for
+    # backward compatibility with existing clients and now report the Gemini provider status
+    # (services["model"] = GEMINI_MODEL available).
     return HealthCheckResponse(
         status=overall,
-        ollama=ollama_ok,
+        ollama=provider_ok,
         chromadb=chroma_ok,
         version=API_VERSION,
         services={
             "api": "ok",
             "chroma": label(chroma_ok),
-            "ollama": label(ollama_ok),
+            "ollama": label(provider_ok),  # legacy key = Gemini provider
             "model": label(model_ok),
             "storage": label(storage_ok),
             "embedding_index": label(embedding_index_ok),
@@ -82,8 +85,9 @@ async def _collect() -> HealthCheckResponse:
     summary="Health Check",
     responses=error_responses(500),
     description=(
-        "Returns operational status of Module 3 and its dependencies (Chroma, Ollama, "
-        "Qwen model). Always returns HTTP 200; check the status field for degradation."
+        "Returns operational status of Module 3 and its dependencies (Chroma, Gemini API, "
+        "Gemini model). Always returns HTTP 200; check the status field for degradation. "
+        "The `ollama` fields are legacy names for the LLM provider (Gemini) status."
     ),
 )
 async def health_check() -> JSONResponse:

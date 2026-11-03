@@ -20,16 +20,16 @@ class _Closable:
             raise RuntimeError("close failed")
 
 
-def _no_deps(monkeypatch, *, chroma_ok: bool = True, ollama_ok: bool = True):
+def _no_deps(monkeypatch, *, chroma_ok: bool = True, provider_ok: bool = True):
     def init():
         if not chroma_ok:
             raise RuntimeError("chroma unavailable")
 
-    async def ollama() -> bool:
-        return ollama_ok
+    async def provider() -> bool:
+        return provider_ok
 
     monkeypatch.setattr("app.main.init_chroma", init)
-    monkeypatch.setattr("app.services.ollama_checker.check_ollama_health", ollama)
+    monkeypatch.setattr("app.services.provider_checker.check_provider_health", provider)
 
 
 @pytest.mark.asyncio
@@ -64,9 +64,9 @@ async def test_shutdown_with_clients_never_created(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("chroma_ok,ollama_ok", [(False, True), (True, False), (False, False)])
-async def test_startup_degrades_instead_of_crashing_when_dependencies_are_down(monkeypatch, chroma_ok, ollama_ok):
-    _no_deps(monkeypatch, chroma_ok=chroma_ok, ollama_ok=ollama_ok)
+@pytest.mark.parametrize("chroma_ok,provider_ok", [(False, True), (True, False), (False, False)])
+async def test_startup_degrades_instead_of_crashing_when_dependencies_are_down(monkeypatch, chroma_ok, provider_ok):
+    _no_deps(monkeypatch, chroma_ok=chroma_ok, provider_ok=provider_ok)
     monkeypatch.setattr(llm_service, "_llm_service", None)
     monkeypatch.setattr(embedding_service, "_embedding_service", None)
     async with lifespan(app):

@@ -21,36 +21,33 @@ class Settings(BaseSettings):
     app_host: str = Field("0.0.0.0")
     app_port: int = Field(8003)
 
-    # Gemini (Google AI Studio)
+    # Gemini (Google AI Studio) - the only LLM + embedding provider.
     # GEMINI_API_KEY is a secret: set it only through .env / environment, never commit it.
-    # When set, Module 3 uses Google AI Studio (Gemini) for LLM generation and embeddings.
+    # Empty key = the app still starts, /health reports degraded and model calls fail with 503.
     gemini_api_key: str = Field("", repr=False)
     gemini_base_url: str = Field("https://generativelanguage.googleapis.com/v1beta")
     gemini_model: str = Field("gemini-3.5-flash-lite")
     gemini_embedding_model: str = Field("gemini-embedding-001")
 
-    # Ollama
-    ollama_base_url: str = Field("http://localhost:11434")
-    ollama_model: str = Field("qwen2.5:7b")
-    ollama_embedding_model: str = Field("nomic-embed-text")
-    ollama_timeout: int = Field(120)
-    # Connection-establishment timeout and the short timeout used by health probes (seconds).
-    ollama_connect_timeout: float = Field(10.0)
-    ollama_health_timeout: float = Field(5.0)
-    ollama_temperature: float = Field(0.2)
-    ollama_num_predict: int = Field(1024)
-    # Transient-error retries for Ollama chat calls (HTTP 502/503/504 only).
-    ollama_max_retries: int = Field(1)
-    ollama_retry_backoff_s: float = Field(0.5)
+    # LLM call parameters (provider-neutral names). Timeouts in seconds.
+    llm_timeout: float = Field(120.0)
+    # Connection-establishment timeout and the short timeout used by health probes.
+    llm_connect_timeout: float = Field(10.0)
+    llm_health_timeout: float = Field(5.0)
+    llm_temperature: float = Field(0.2)
+    llm_max_output_tokens: int = Field(1024)
+    # Transient-error retries (HTTP 429/500/502/503/504 and dropped connections) and the backoff between them.
+    llm_max_retries: int = Field(1)
+    llm_retry_backoff_s: float = Field(0.5)
 
-    # Backpressure: max simultaneous Ollama generation calls (0 = unlimited) and how long a call
+    # Backpressure: max simultaneous LLM generation calls (0 = unlimited) and how long a call
     # may wait for a slot before being rejected with SERVICE_OVERLOADED (503).
     llm_max_concurrency: int = Field(4)
     llm_queue_timeout_s: float = Field(30.0)
 
-    # Phase 22: embeddings are bounded the same way. A document is embedded in batches of at most
-    # EMBEDDING_BATCH_SIZE texts (sequentially, so memory and Ollama load stay bounded) and at most
-    # MAX_CONCURRENT_EMBEDDINGS Ollama embedding calls run at once (0 = unlimited).
+    # Embeddings are bounded the same way. A document is embedded in batches of at most
+    # EMBEDDING_BATCH_SIZE texts (sequentially, so memory and provider load stay bounded) and at most
+    # MAX_CONCURRENT_EMBEDDINGS embedding calls run at once (0 = unlimited).
     embedding_batch_size: int = Field(64)
     max_concurrent_embeddings: int = Field(4)
     embedding_queue_timeout_s: float = Field(30.0)
@@ -66,7 +63,7 @@ class Settings(BaseSettings):
     slow_stage_threshold_ms: int = Field(5000)
     slow_llm_threshold_ms: int = Field(60000)
     # Whole-request time budget (seconds). LLM/embedding calls never wait past it and retries are skipped
-    # when it is nearly spent. Must be >= OLLAMA_TIMEOUT so one full model call always fits.
+    # when it is nearly spent. Must be >= LLM_TIMEOUT so one full model call always fits.
     request_timeout_s: float = Field(300.0)
     # Readiness: the persistence volume must be writable and have at least this much free space.
     min_free_disk_mb: int = Field(100)
@@ -169,23 +166,20 @@ class Settings(BaseSettings):
             errors.append("GEMINI_MODEL must not be empty")
         if not self.gemini_embedding_model.strip():
             errors.append("GEMINI_EMBEDDING_MODEL must not be empty")
-        parsed = urlparse(self.ollama_base_url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            errors.append("OLLAMA_BASE_URL must be a valid http(s) URL")
-        if not self.ollama_model.strip():
-            errors.append("OLLAMA_MODEL must not be empty")
-        if not self.ollama_embedding_model.strip():
-            errors.append("OLLAMA_EMBEDDING_MODEL must not be empty")
-        if self.ollama_timeout <= 0:
-            errors.append("OLLAMA_TIMEOUT must be > 0")
-        if self.ollama_connect_timeout <= 0:
-            errors.append("OLLAMA_CONNECT_TIMEOUT must be > 0")
-        if self.ollama_health_timeout <= 0:
-            errors.append("OLLAMA_HEALTH_TIMEOUT must be > 0")
-        if self.ollama_max_retries < 0:
-            errors.append("OLLAMA_MAX_RETRIES must be >= 0")
-        if self.ollama_retry_backoff_s < 0:
-            errors.append("OLLAMA_RETRY_BACKOFF_S must be >= 0")
+        if self.llm_timeout <= 0:
+            errors.append("LLM_TIMEOUT must be > 0")
+        if self.llm_connect_timeout <= 0:
+            errors.append("LLM_CONNECT_TIMEOUT must be > 0")
+        if self.llm_health_timeout <= 0:
+            errors.append("LLM_HEALTH_TIMEOUT must be > 0")
+        if not (0.0 <= self.llm_temperature <= 2.0):
+            errors.append("LLM_TEMPERATURE must be between 0 and 2")
+        if self.llm_max_output_tokens <= 0:
+            errors.append("LLM_MAX_OUTPUT_TOKENS must be > 0")
+        if self.llm_max_retries < 0:
+            errors.append("LLM_MAX_RETRIES must be >= 0")
+        if self.llm_retry_backoff_s < 0:
+            errors.append("LLM_RETRY_BACKOFF_S must be >= 0")
         if not self.chroma_persist_directory.strip():
             errors.append("CHROMA_PERSIST_DIRECTORY must not be empty")
         if not self.chroma_collection_name.strip():
@@ -216,8 +210,8 @@ class Settings(BaseSettings):
             errors.append("SLOW_STAGE_THRESHOLD_MS and SLOW_LLM_THRESHOLD_MS must be > 0")
         if self.request_timeout_s <= 0:
             errors.append("REQUEST_TIMEOUT_S must be > 0")
-        elif self.request_timeout_s < self.ollama_timeout:
-            errors.append("REQUEST_TIMEOUT_S must be >= OLLAMA_TIMEOUT (the request would always time out before the model call)")
+        elif self.request_timeout_s < self.llm_timeout:
+            errors.append("REQUEST_TIMEOUT_S must be >= LLM_TIMEOUT (the request would always time out before the model call)")
         if self.min_free_disk_mb < 0:
             errors.append("MIN_FREE_DISK_MB must be >= 0")
         if self.log_format.strip().lower() not in {"text", "json"}:
@@ -261,11 +255,6 @@ class Settings(BaseSettings):
                 errors.append("CORS_ALLOWED_ORIGINS must not contain '*' in production")
             if self.log_level.strip().upper() == "DEBUG":
                 errors.append("LOG_LEVEL=DEBUG is not allowed in production")
-            # Phase 21 model immutability: an untagged or ":latest" model silently changes when Ollama re-pulls it.
-            for env_name, model in (("OLLAMA_MODEL", self.ollama_model), ("OLLAMA_EMBEDDING_MODEL", self.ollama_embedding_model)):
-                tag = model.strip().rsplit(":", 1)[1] if ":" in model.strip() else ""
-                if tag in ("", "latest"):
-                    errors.append(f"{env_name} must carry an explicit, non-'latest' tag in production (got '{model}')")
         if errors:
             raise ValueError("; ".join(errors))
         return self

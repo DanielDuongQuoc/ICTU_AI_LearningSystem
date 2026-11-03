@@ -77,7 +77,7 @@ def test_log_format_setting_is_validated(monkeypatch):
 
 
 def test_request_timeout_must_cover_a_model_call(monkeypatch):
-    monkeypatch.setenv("OLLAMA_TIMEOUT", "120")
+    monkeypatch.setenv("LLM_TIMEOUT", "120")
     monkeypatch.setenv("REQUEST_TIMEOUT_S", "30")
     get_settings.cache_clear()
     with pytest.raises(Exception):

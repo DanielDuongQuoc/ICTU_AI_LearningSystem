@@ -2,7 +2,7 @@
 
 * dataset loading + schema validation (``DatasetError`` -> exit code 2),
 * run metadata / reproducibility fingerprint (never contains secrets),
-* an offline or Ollama-backed service stack over a throw-away ChromaDB,
+* an offline or Gemini-backed service stack over a throw-away ChromaDB,
 * JSON + Markdown report writing that refuses to overwrite an existing report.
 
 Exit codes used by every ``scripts/evaluate_*.py`` script::
@@ -277,7 +277,7 @@ def run_metadata(
         )
     else:
         notes.append(
-            "OLLAMA mode: model tag is recorded but Ollama does not expose an immutable revision, and "
+            "GEMINI mode: model name is recorded but the hosted model revision is not pinned, and "
             "generation is not bit-for-bit reproducible; repeat runs can differ."
         )
     return {
@@ -324,18 +324,18 @@ class EvalStack:
             from chromadb.config import Settings as ChromaSettings
 
             from app.repositories.chroma_repository import ChromaRepository
-            from app.services.embedding_service import EmbeddingService
-            from app.services.llm_service import LLMService
+            from app.services.embedding_service import GeminiEmbeddingService
+            from app.services.llm_service import GeminiLLMService
 
-            self.embedding = EmbeddingService()
-            self.llm = LLMService()
+            self.embedding = GeminiEmbeddingService()
+            self.llm = GeminiLLMService()
             self._tmp = tempfile.mkdtemp(prefix="quality_eval_")
             client = chromadb.PersistentClient(
                 path=self._tmp, settings=ChromaSettings(anonymized_telemetry=False)
             )
             self.repo = ChromaRepository(client=client, collection_name="quality_eval")
-            self.embedding_model = self.settings.ollama_embedding_model
-            self.model_name = self.settings.ollama_model
+            self.embedding_model = self.settings.gemini_embedding_model
+            self.model_name = self.settings.gemini_model
 
         from app.services.evaluation_service import EvaluationService
         from app.services.question_service import QuestionGenerationService

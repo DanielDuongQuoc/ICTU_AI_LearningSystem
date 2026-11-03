@@ -109,7 +109,8 @@ async def test_health_does_not_call_the_llm(client, monkeypatch):
         called.append(1)
         return "x"
 
-    monkeypatch.setattr(llm_service.OllamaLLMService, "generate", spy)
+    monkeypatch.setattr(llm_service.GeminiLLMService, "generate", spy)
+    monkeypatch.setattr(llm_service.GeminiLLMService, "generate_json", spy)
     await client.get("/health")
     await client.get("/health/ready")
     assert called == []
@@ -257,8 +258,7 @@ def test_compose_and_dockerfile_invariants():
     api = compose["services"]["api"]
     assert api["stop_grace_period"] == "30s"
     assert "no-new-privileges:true" in api["security_opt"]
-    assert "OLLAMA_BASE_URL=http://ollama:11434" in api["environment"]
-    assert all(p.startswith("127.0.0.1:") for p in compose["services"]["ollama"]["ports"])
+    assert not any("OLLAMA" in str(e) for e in api["environment"]) and "ollama" not in compose["services"]
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "USER app" in dockerfile and "exec uvicorn" in dockerfile and not any(ln.split()[0] in ("COPY", "ADD") and ".env" in ln for ln in dockerfile.splitlines() if ln.strip())
 

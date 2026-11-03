@@ -45,8 +45,8 @@ USER app
 
 EXPOSE 8003
 
-# /health always answers 200 (status "degraded" when Ollama/Chroma is down), so a missing
-# model never makes the container unhealthy.  Python is used so curl is not required.
+# The healthcheck probes /health/live (process only), so a Gemini outage or missing API key never makes the
+# container unhealthy (/health then reports "degraded").  Python is used so curl is not required.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD ["python", "-c", "import os,urllib.request as u; p=os.environ.get('PORT') or os.environ.get('APP_PORT','8003'); u.urlopen('http://127.0.0.1:%s/health/live' % p, timeout=5)"]
 

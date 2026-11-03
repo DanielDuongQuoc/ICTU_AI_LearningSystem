@@ -1,16 +1,14 @@
-"""Phase 16 - dependency failure and recovery, document lifecycle. No real Ollama needed."""
+"""Phase 16 - dependency failure and recovery, document lifecycle (offline, providers faked)."""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
-import httpx
 import pytest
 
 from app.core.exceptions import AppError, ErrorCode
 from app.core.config import get_settings
-from app.services.llm_service import OllamaLLMService
 from tests.fakes import Stack, sample_pdf_bytes
 
 TEXT_A = "Zebracorn systems explain machine learning. Zebracorn models learn patterns from data."
@@ -41,82 +39,22 @@ def _eval_body(doc: str) -> dict[str, Any]:
             "max_score": 10}
 
 
-# ------------------------------------------------------------------ Ollama: service level
-
-def _svc(handler) -> OllamaLLMService:
-    svc = OllamaLLMService(base_url="http://ollama.test", model="m")
-    svc._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://ollama.test")
-    return svc
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("failure,code", [
-    (httpx.ConnectError("refused"), ErrorCode.OLLAMA_UNAVAILABLE),
-    (httpx.ReadTimeout("slow"), ErrorCode.OLLAMA_TIMEOUT),
-])
-async def test_ollama_down_then_recovers(failure, code):
-    state = {"down": True}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if state["down"]:
-            raise failure
-        return httpx.Response(200, json={"message": {"content": "ok"}, "done": True})
-
-    svc = _svc(handler)
-    with pytest.raises(AppError) as exc:
-        await svc.generate("s", "u")
-    assert exc.value.code == code
-    state["down"] = False
-    assert await svc.generate("s", "u") == "ok"          # same instance, no restart needed
-    await svc.close()
-
-
-@pytest.mark.asyncio
-async def test_stream_interruption_and_invalid_json_then_recovery():
-    mode = {"m": "timeout"}
-
-    async def body():
-        yield (json.dumps({"message": {"content": "par"}, "done": False}) + "\n").encode()
-        if mode["m"] == "timeout":
-            raise httpx.ReadTimeout("stream stalled")
-        if mode["m"] == "garbage":
-            yield b"{not json}\n"
-            return
-        yield (json.dumps({"message": {"content": "tial"}, "done": True}) + "\n").encode()
-
-    svc = _svc(lambda request: httpx.Response(200, content=body()))
-
-    async def drain() -> str:
-        return "".join([p async for p in svc.generate_stream("s", "u")])
-
-    with pytest.raises(AppError) as exc:
-        await drain()
-    assert exc.value.code == ErrorCode.OLLAMA_TIMEOUT
-    mode["m"] = "garbage"
-    with pytest.raises(AppError) as exc:
-        await drain()
-    assert exc.value.code == ErrorCode.OLLAMA_INVALID_RESPONSE
-    mode["m"] = "ok"
-    assert await drain() == "partial"
-    await svc.close()
-
-
 # ------------------------------------------------------------------ readiness follows dependencies
 
 @pytest.mark.asyncio
-async def test_readiness_tracks_ollama_and_chroma_recovery(client, monkeypatch):
-    state = {"ollama": False, "chroma": True}
+async def test_readiness_tracks_provider_and_chroma_recovery(client, monkeypatch):
+    state = {"provider": False, "chroma": True}
 
-    async def ollama() -> bool:
-        return state["ollama"]
+    async def provider() -> bool:
+        return state["provider"]
 
-    monkeypatch.setattr("app.api.health.check_ollama_health", ollama)
+    monkeypatch.setattr("app.api.health.check_provider_health", provider)
     monkeypatch.setattr("app.api.health.check_chroma_health", lambda: state["chroma"])
 
     assert (await client.get("/ready")).status_code == 503
     assert (await client.get("/health/live")).status_code == 200      # process stays alive
     assert (await client.get("/health")).json()["status"] == "degraded"
-    state["ollama"] = True
+    state["provider"] = True
     assert (await client.get("/ready")).status_code == 200
     state["chroma"] = False
     r = await client.get("/ready")
@@ -168,7 +106,7 @@ async def test_stream_error_event_then_next_stream_succeeds(client, monkeypatch)
     async def flaky(*a, **k):
         if state["fail"]:
             yield '{"score": 8, "corr'
-            raise AppError(ErrorCode.OLLAMA_TIMEOUT, "Language model request timed out.")
+            raise AppError(ErrorCode.LLM_TIMEOUT, "Language model request timed out.")
         async for piece in original(*a, **k):
             yield piece
 

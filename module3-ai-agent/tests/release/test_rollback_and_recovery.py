@@ -10,26 +10,26 @@ from scripts.smoke_test import run_smoke
 from tests.fakes import Stack
 
 
-# --------------------------------------------------------------- Ollama restart through the smoke flow
+# --------------------------------------------------------------- provider restart through the smoke flow
 @pytest.mark.asyncio
-async def test_ollama_restart_degrades_then_smoke_flow_passes(client, monkeypatch):
+async def test_provider_restart_degrades_then_smoke_flow_passes(client, monkeypatch):
     monkeypatch.setenv("LLM_MAX_CONCURRENCY", "0")
     get_settings.cache_clear()
     stack = Stack().install(monkeypatch)
-    state = {"ollama": False}
+    state = {"up": False}
 
-    async def ollama_ok() -> bool:
-        return state["ollama"]
+    async def provider_ok() -> bool:
+        return state["up"]
 
-    monkeypatch.setattr("app.api.health.check_ollama_health", ollama_ok)
+    monkeypatch.setattr("app.api.health.check_provider_health", provider_ok)
     monkeypatch.setattr("app.api.health.check_chroma_health", lambda: True)
 
-    down = await run_smoke(client, require_ready=True)                          # Ollama "restarting"
+    down = await run_smoke(client, require_ready=True)                          # provider "restarting"
     assert [s for s, ok, _ in down if not ok] == ["ready"], down                  # fails at readiness, nothing crashes
     assert (await client.get("/health/live")).status_code == 200
     assert stack.llm.calls == []                                                 # readiness never generated anything
 
-    state["ollama"] = True                                                       # Ollama back
+    state["up"] = True                                                           # provider back
     up = await run_smoke(client, require_ready=True)
     assert [s for s, ok, _ in up if not ok] == [], up
     assert {s for s, _, _ in up} >= {"health", "ready", "upload", "retrieve", "questions", "evaluate", "stream", "delete"}
@@ -37,7 +37,7 @@ async def test_ollama_restart_degrades_then_smoke_flow_passes(client, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_request_failing_during_ollama_outage_then_next_succeeds(client, monkeypatch):
+async def test_request_failing_during_provider_outage_then_next_succeeds(client, monkeypatch):
     monkeypatch.setenv("LLM_MAX_CONCURRENCY", "0")
     get_settings.cache_clear()
     stack = Stack().install(monkeypatch)
@@ -46,7 +46,7 @@ async def test_request_failing_during_ollama_outage_then_next_succeeds(client, m
 
     async def flaky(*a, **k):
         if state["down"]:
-            raise AppError(ErrorCode.OLLAMA_UNAVAILABLE, "Ollama server is not reachable.")
+            raise AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API is not reachable.")
         return await real(*a, **k)
 
     monkeypatch.setattr(stack.llm, "generate_json", flaky)

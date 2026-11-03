@@ -3,7 +3,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_health_all_ok(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=True)
+    mocker.patch("app.api.health.check_provider_health", return_value=True)
     mocker.patch("app.api.health.check_chroma_health", return_value=True)
     response = await client.get("/health")
     assert response.status_code == 200
@@ -16,7 +16,7 @@ async def test_health_all_ok(client, mocker):
 
 @pytest.mark.asyncio
 async def test_health_ollama_down(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=False)
+    mocker.patch("app.api.health.check_provider_health", return_value=False)
     mocker.patch("app.api.health.check_chroma_health", return_value=True)
     response = await client.get("/health")
     assert response.status_code == 200
@@ -28,7 +28,7 @@ async def test_health_ollama_down(client, mocker):
 
 @pytest.mark.asyncio
 async def test_health_chroma_down(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=True)
+    mocker.patch("app.api.health.check_provider_health", return_value=True)
     mocker.patch("app.api.health.check_chroma_health", return_value=False)
     response = await client.get("/health")
     assert response.status_code == 200
@@ -40,7 +40,7 @@ async def test_health_chroma_down(client, mocker):
 
 @pytest.mark.asyncio
 async def test_health_all_down(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=False)
+    mocker.patch("app.api.health.check_provider_health", return_value=False)
     mocker.patch("app.api.health.check_chroma_health", return_value=False)
     response = await client.get("/health")
     assert response.status_code == 200
@@ -52,7 +52,7 @@ async def test_health_all_down(client, mocker):
 
 @pytest.mark.asyncio
 async def test_health_response_schema(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=True)
+    mocker.patch("app.api.health.check_provider_health", return_value=True)
     mocker.patch("app.api.health.check_chroma_health", return_value=True)
     response = await client.get("/health")
     data = response.json()
@@ -65,7 +65,7 @@ async def test_health_response_schema(client, mocker):
 
 @pytest.mark.asyncio
 async def test_health_services_block_ok(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=True)
+    mocker.patch("app.api.health.check_provider_health", return_value=True)
     mocker.patch("app.api.health.check_chroma_health", return_value=True)
     data = (await client.get("/health")).json()
     assert data["status"] == "ok"
@@ -77,7 +77,7 @@ async def test_health_services_block_ok(client, mocker):
 
 @pytest.mark.asyncio
 async def test_health_degraded_when_ollama_down(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=False)
+    mocker.patch("app.api.health.check_provider_health", return_value=False)
     mocker.patch("app.api.health.check_chroma_health", return_value=True)
     resp = await client.get("/health")
     assert resp.status_code == 200
@@ -91,7 +91,7 @@ async def test_health_degraded_when_ollama_down(client, mocker):
 
 @pytest.mark.asyncio
 async def test_health_model_missing(client, mocker, monkeypatch):
-    mocker.patch("app.api.health.check_ollama_health", return_value=True)
+    mocker.patch("app.api.health.check_provider_health", return_value=True)
     mocker.patch("app.api.health.check_chroma_health", return_value=True)
 
     async def _no_model() -> bool:
@@ -106,7 +106,7 @@ async def test_health_model_missing(client, mocker, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_health_chroma_unavailable_services(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=True)
+    mocker.patch("app.api.health.check_provider_health", return_value=True)
     mocker.patch("app.api.health.check_chroma_health", return_value=False)
     data = (await client.get("/health")).json()
     assert data["status"] == "degraded"
@@ -115,7 +115,7 @@ async def test_health_chroma_unavailable_services(client, mocker):
 
 @pytest.mark.asyncio
 async def test_health_does_not_crash_when_checks_raise(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", side_effect=RuntimeError("boom"))
+    mocker.patch("app.api.health.check_provider_health", side_effect=RuntimeError("boom"))
     mocker.patch("app.api.health.check_chroma_health", side_effect=RuntimeError("boom"))
     resp = await client.get("/health")
     assert resp.status_code == 200
@@ -134,7 +134,7 @@ async def test_health_live(client):
 
 @pytest.mark.asyncio
 async def test_health_ready_ok(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=True)
+    mocker.patch("app.api.health.check_provider_health", return_value=True)
     mocker.patch("app.api.health.check_chroma_health", return_value=True)
     resp = await client.get("/health/ready")
     assert resp.status_code == 200
@@ -142,7 +142,7 @@ async def test_health_ready_ok(client, mocker):
 
 @pytest.mark.asyncio
 async def test_health_ready_503_when_degraded(client, mocker):
-    mocker.patch("app.api.health.check_ollama_health", return_value=False)
+    mocker.patch("app.api.health.check_provider_health", return_value=False)
     mocker.patch("app.api.health.check_chroma_health", return_value=True)
     resp = await client.get("/health/ready")
     assert resp.status_code == 503

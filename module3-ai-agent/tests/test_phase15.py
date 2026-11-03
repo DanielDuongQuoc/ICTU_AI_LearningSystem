@@ -22,11 +22,12 @@ ROOT = Path(__file__).resolve().parents[1]
 # ------------------------------------------------------------ configuration failure matrix
 
 @pytest.mark.parametrize("env,value", [
-    ("OLLAMA_BASE_URL", "not-a-url"),
-    ("OLLAMA_BASE_URL", "ftp://host:1"),
-    ("OLLAMA_TIMEOUT", "0"),
-    ("OLLAMA_TIMEOUT", "abc"),
-    ("OLLAMA_CONNECT_TIMEOUT", "-1"),
+    ("GEMINI_BASE_URL", "not-a-url"),
+    ("GEMINI_BASE_URL", "ftp://host:1"),
+    ("LLM_TIMEOUT", "0"),
+    ("LLM_TIMEOUT", "abc"),
+    ("LLM_CONNECT_TIMEOUT", "-1"),
+    ("REQUEST_TIMEOUT_S", "60"),  # < LLM_TIMEOUT (120)
     ("TOP_K", "0"),
     ("TOP_K", "50"),            # > MAX_TOP_K (20)
     ("MAX_TOP_K", "0"),
@@ -39,7 +40,7 @@ ROOT = Path(__file__).resolve().parents[1]
     ("CHUNK_OVERLAP", "9999"),  # >= CHUNK_SIZE
     ("SIMILARITY_THRESHOLD", "2"),
     ("APP_ENV", "banana"),
-    ("OLLAMA_MODEL", " "),
+    ("GEMINI_MODEL", " "),
     ("CHROMA_COLLECTION_NAME", ""),
 ])
 def test_invalid_environment_is_rejected(monkeypatch, env, value):
@@ -53,14 +54,15 @@ def test_missing_environment_falls_back_to_valid_defaults(monkeypatch):
         if name.upper() in {f.upper() for f in Settings.model_fields}:
             monkeypatch.delenv(name, raising=False)
     s = Settings(_env_file=None)
-    assert s.ollama_base_url.startswith("http") and s.top_k <= s.max_top_k
+    assert s.gemini_base_url.startswith("https://") and s.top_k <= s.max_top_k
+    assert s.gemini_api_key == ""  # no key by default: app starts degraded, never crashes
     assert s.cors_origins == []  # CORS off by default
 
 
 def test_app_refuses_to_start_with_invalid_configuration(monkeypatch):
     import app.main as main
 
-    monkeypatch.setenv("OLLAMA_BASE_URL", "not-a-url")
+    monkeypatch.setenv("GEMINI_BASE_URL", "not-a-url")
     get_settings.cache_clear()
     try:
         with pytest.raises(RuntimeError, match="APPLICATION_CONFIGURATION_ERROR"):
@@ -71,11 +73,11 @@ def test_app_refuses_to_start_with_invalid_configuration(monkeypatch):
 
 
 def test_source_has_no_hardcoded_deployment_values():
-    """Ollama URL / model names live only in config defaults (and tests/docs)."""
+    """Provider URL / model names live only in config defaults (and tests/docs)."""
     offenders = []
     for path in (ROOT / "app").rglob("*.py"):
         text = path.read_text(encoding="utf-8")
-        for needle in ("11434", "qwen2.5", "nomic-embed-text"):
+        for needle in ("generativelanguage.googleapis.com", "gemini-3", "gemini-embedding-001"):
             if needle in text and path.name != "config.py":
                 offenders.append(f"{path.name}:{needle}")
     assert offenders == []

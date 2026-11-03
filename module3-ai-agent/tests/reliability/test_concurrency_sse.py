@@ -91,7 +91,7 @@ async def test_failure_of_one_concurrent_request_does_not_poison_others(client, 
     async def every_third_fails(*a, **k):
         state["n"] += 1
         if state["n"] % 3 == 0:
-            raise AppError(ErrorCode.OLLAMA_TIMEOUT, "Language model request timed out.")
+            raise AppError(ErrorCode.LLM_TIMEOUT, "Language model request timed out.")
         return await real(*a, **k)
 
     monkeypatch.setattr(stack.llm, "generate_json", every_third_fails)
@@ -127,7 +127,7 @@ async def test_sse_budget_exhaustion_is_a_controlled_error_event(client, monkeyp
     doc = await _upload(client)
 
     async def expired(*a, **k):
-        raise AppError(ErrorCode.OLLAMA_TIMEOUT, "The request time budget was exhausted.")
+        raise AppError(ErrorCode.LLM_TIMEOUT, "The request time budget was exhausted.")
         yield ""  # pragma: no cover
 
     monkeypatch.setattr(stack.llm, "generate_stream", expired)

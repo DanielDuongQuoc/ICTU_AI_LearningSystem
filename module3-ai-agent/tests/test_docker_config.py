@@ -39,10 +39,10 @@ def test_dockerfile_basics():
     assert "HEALTHCHECK" in text
 
 
-def test_dockerfile_does_not_bake_in_secrets_or_ollama_url():
+def test_dockerfile_does_not_bake_in_secrets():
     text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert not re.search(r"COPY[^\n]*\.env(\s|$)", text), ".env must not be copied"
-    assert "localhost:11434" not in text
+    assert "GEMINI_API_KEY" not in text
 
 
 def test_dockerignore_excludes_env_and_data():
@@ -52,43 +52,33 @@ def test_dockerignore_excludes_env_and_data():
 
 
 def test_compose_has_required_services(compose):
-    assert {"api", "ollama"} <= set(compose["services"])
+    assert set(compose["services"]) == {"api"}          # Gemini is a hosted API: no model server
 
 
 def test_compose_ports(compose):
     api_ports = [str(p) for p in compose["services"]["api"]["ports"]]
-    ollama_ports = [str(p) for p in compose["services"]["ollama"]["ports"]]
     assert any(p.endswith("8003:8003") for p in api_ports)
-    assert any(p.endswith("11434:11434") for p in ollama_ports)
-    # the Ollama port must not be exposed on all interfaces
-    assert all(p.startswith("127.0.0.1:") for p in ollama_ports)
-
-
-def test_compose_ollama_url_uses_service_name_not_localhost(compose):
-    env = _env_map(compose["services"]["api"])
-    assert env["OLLAMA_BASE_URL"] == "http://ollama:11434"
-    assert "localhost" not in env["OLLAMA_BASE_URL"] and "127.0.0.1" not in env["OLLAMA_BASE_URL"]
 
 
 def test_compose_persistent_volumes(compose):
     volumes = set(compose["volumes"])
-    assert {"ollama_data", "chroma_data"} <= volumes
+    assert {"chroma_data", "uploads_data"} <= volumes
     api_mounts = compose["services"]["api"]["volumes"]
     assert any(m.startswith("chroma_data:/app/data/chroma") for m in api_mounts)
-    assert any(m.startswith("ollama_data:/root/.ollama") for m in compose["services"]["ollama"]["volumes"])
     assert _env_map(compose["services"]["api"])["CHROMA_PERSIST_DIRECTORY"] == "/app/data/chroma"
 
 
 def test_compose_important_environment_present(compose):
     env = _env_map(compose["services"]["api"])
-    for key in ("APP_HOST", "APP_PORT", "OLLAMA_BASE_URL", "CHROMA_PERSIST_DIRECTORY"):
+    for key in ("APP_HOST", "APP_PORT", "CHROMA_PERSIST_DIRECTORY"):
         assert key in env
 
 
-def test_compose_api_waits_for_ollama_and_healthchecks(compose):
+def test_compose_api_healthcheck_and_env_file(compose):
     api = compose["services"]["api"]
-    assert "ollama" in api["depends_on"]
-    assert "healthcheck" in api and "healthcheck" in compose["services"]["ollama"]
+    assert "depends_on" not in api
+    assert "healthcheck" in api
+    assert any(e.get("path") == ".env" and e.get("required") is False for e in api["env_file"])
     # the API healthcheck must be liveness (never fails because a model is missing)
     assert "/health/live" in " ".join(api["healthcheck"]["test"])
     assert api["build"]["dockerfile"] == "Dockerfile"
@@ -107,8 +97,9 @@ def _env_example() -> dict[str, str]:
 def test_env_example_covers_settings_and_is_valid():
     env = _env_example()
     for key in (
-        "APP_NAME", "APP_ENV", "APP_HOST", "APP_PORT", "OLLAMA_BASE_URL", "OLLAMA_MODEL",
-        "OLLAMA_EMBEDDING_MODEL", "OLLAMA_TIMEOUT", "OLLAMA_TEMPERATURE", "OLLAMA_NUM_PREDICT",
+        "APP_NAME", "APP_ENV", "APP_HOST", "APP_PORT", "GEMINI_API_KEY", "GEMINI_BASE_URL", "GEMINI_MODEL",
+        "GEMINI_EMBEDDING_MODEL", "LLM_TIMEOUT", "LLM_TEMPERATURE", "LLM_MAX_OUTPUT_TOKENS",
+        "LLM_MAX_RETRIES", "LLM_RETRY_BACKOFF_S",
         "CHROMA_PERSIST_DIRECTORY", "CHROMA_COLLECTION_NAME", "CHUNK_SIZE", "CHUNK_OVERLAP",
         "TOP_K", "SIMILARITY_THRESHOLD", "MAX_CONTEXT_CHARS", "MAX_TOP_K", "MAX_UPLOAD_SIZE_MB",
         "SLOW_REQUEST_THRESHOLD_MS",

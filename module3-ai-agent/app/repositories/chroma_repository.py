@@ -121,14 +121,8 @@ def check_embedding_compat() -> bool:
         logger.error("Embedding compatibility check failed: %s", exc)
         return False
     models = {str(m["embedding_model"]) for m in (got.get("metadatas") or []) if m and m.get("embedding_model")}
-    from app.core import runtime_config
-
-    s = get_settings()
-    wanted = runtime_config.current().embedding_model
-    allowed = {wanted}
-    if s.gemini_api_key.strip() and wanted == s.ollama_embedding_model:
-        allowed.add(s.gemini_embedding_model)
-    if models and not (models <= allowed):
+    wanted = get_settings().gemini_embedding_model
+    if models and models != {wanted}:
         logger.error("Embedding model mismatch: stored=%s configured=%s (re-index required)", sorted(models), wanted)
         return False
     return True
@@ -206,7 +200,7 @@ class ChromaRepository:
         """Embedding models recorded on (a sample of) the stored chunks.
 
         Chunks indexed before Phase 21 carry no ``embedding_model`` and contribute nothing: compatibility
-        of such legacy data cannot be verified (documented in docs/RELEASE_ENGINEERING.md).
+        of such legacy data cannot be verified.
         """
         try:
             got = self._collection.get(limit=limit, include=["metadatas"])

@@ -47,7 +47,7 @@ def _get_vector_service() -> VectorService:
     description=(
         "Multipart upload (field `file`): `.pdf` or `.docx`. The file is validated (extension, MIME type, `%PDF` / OOXML signature, "
         "size limit MAX_UPLOAD_SIZE_MB), text is extracted and cleaned, split into chunks, embedded "
-        "with the configured Ollama embedding model and indexed in ChromaDB. Returns the new `document_id`."
+        "with the configured Gemini embedding model and indexed in ChromaDB. Returns the new `document_id`."
     ),
     responses=error_responses(400, 413, 422, 429, 500, 502, 503, 504),
     dependencies=[Depends(rate_limit())],

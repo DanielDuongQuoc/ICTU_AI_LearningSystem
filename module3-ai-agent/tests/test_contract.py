@@ -177,7 +177,7 @@ async def test_success_content_types_and_stream_headers(client, monkeypatch):
     assert set(types) <= {"status", "token", "result", "error", "done"}
     assert types[-1] == "done" and types.count("done") == 1
     assert types.count("result") == 1 and types.index("result") < types.index("done")
-    assert all("response" not in e and "done_reason" not in e for e in events)  # no raw Ollama frames
+    assert all("response" not in e and "done_reason" not in e for e in events)  # no raw provider frames
 
     r = await client.delete(f"/api/documents/{doc}")
     assert r.status_code == 200

@@ -12,7 +12,7 @@ async def test_low_disk_makes_ready_503_then_recovers_and_live_stays_200(client,
     async def ok() -> bool:
         return True
 
-    monkeypatch.setattr("app.api.health.check_ollama_health", ok)
+    monkeypatch.setattr("app.api.health.check_provider_health", ok)
     monkeypatch.setattr("app.api.health.check_chroma_health", lambda: True)
     state = {"disk_ok": False}
     monkeypatch.setattr("app.api.health.check_storage_health", lambda: state["disk_ok"])

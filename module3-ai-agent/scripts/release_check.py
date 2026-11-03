@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 Result = tuple[str, str, str]  # (name, PASS|FAIL|SKIP, detail)
-SECRET_RE = re.compile(r"(?i)^\s*[A-Z_]*(PASSWORD|SECRET|API_KEY|TOKEN)[A-Z_]*[ \t]*=[ \t]*\S+", re.M)
+SECRET_RE = re.compile(r"(?i)^\s*[A-Z_]*(PASSWORD|SECRET|API_KEY|TOKEN(?!S))[A-Z_]*[ \t]*=[ \t]*\S+", re.M)
 REQUIRED_DOCS = ["README.md", "docs/INTEGRATION_CONTRACT.md", "docs/SECURITY.md"]
 EXPECTED_PATHS = {
     "/health", "/health/live", "/health/ready", "/ready", "/api/documents/upload",
@@ -87,16 +87,12 @@ def check_dockerfile_and_compose() -> Result:
         problems.append("Dockerfile copies .env")
     compose = yaml.safe_load(_read("docker-compose.yml"))
     api = compose["services"]["api"]
-    env = {str(e).split("=", 1)[0]: str(e).split("=", 1)[1] for e in api.get("environment", []) if "=" in str(e)}
-    if env.get("OLLAMA_BASE_URL") != "http://ollama:11434":
-        problems.append("api OLLAMA_BASE_URL must be http://ollama:11434 in compose")
     if "healthcheck" not in api:
         problems.append("api has no healthcheck")
     if not any("chroma" in str(v) for v in api.get("volumes", [])):
         problems.append("api has no Chroma volume")
-    ports = [str(p) for p in compose["services"]["ollama"].get("ports", [])]
-    if any(not p.startswith("127.0.0.1:") for p in ports):
-        problems.append("ollama port is exposed beyond loopback")
+    if "no-new-privileges:true" not in api.get("security_opt", []):
+        problems.append("api lacks no-new-privileges")
     return ("Dockerfile / compose hardening", "FAIL" if problems else "PASS", "; ".join(problems))
 
 

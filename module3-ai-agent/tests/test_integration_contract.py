@@ -172,7 +172,7 @@ async def test_llm_failures_propagate_cleanly(client, stack, code, status):
     doc = (await upload(client, TEXT_A))["document_id"]
 
     async def boom(*a, **k):
-        raise AppError(code=getattr(ErrorCode, code), message="dependency failed")
+        raise AppError(code=code, message="dependency failed")
 
     stack.llm.generate_json = boom
     for path, body in (("/api/evaluations/evaluate", fixture("module2_student_answer.json", document_id=doc)),
@@ -210,7 +210,7 @@ async def test_stream_failure_is_error_then_done_with_safe_payload(client, stack
     doc = (await upload(client, TEXT_A))["document_id"]
 
     async def failing_stream(*a, **k):
-        raise AppError(code=ErrorCode.OLLAMA_UNAVAILABLE, message="down")
+        raise AppError(code=ErrorCode.LLM_UNAVAILABLE, message="down")
         yield ""  # pragma: no cover
 
     stack.llm.generate_stream = failing_stream

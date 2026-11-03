@@ -14,7 +14,6 @@ from app.core.exceptions import AppError, ErrorCode
 from app.core.request_context import resolve_request_id
 from app.main import app
 from app.repositories.chroma_repository import ChromaRepository
-from app.services.llm_service import OllamaLLMService
 
 RETRIEVE_BODY = {"document_id": str(uuid.uuid4()), "question": "What is AI?"}
 
@@ -101,9 +100,9 @@ async def test_unexpected_error_does_not_expose_traceback(monkeypatch):
 @pytest.mark.parametrize(
     "code,status",
     [
-        (ErrorCode.OLLAMA_UNAVAILABLE, 503),
-        (ErrorCode.OLLAMA_TIMEOUT, 504),
-        (ErrorCode.OLLAMA_MODEL_NOT_FOUND, 503),
+        (ErrorCode.LLM_UNAVAILABLE, 503),
+        (ErrorCode.LLM_TIMEOUT, 504),
+        (ErrorCode.LLM_MODEL_NOT_FOUND, 503),
         (ErrorCode.CHROMA_ERROR, 503),
         (ErrorCode.EMBEDDING_ERROR, 502),
         (ErrorCode.LLM_INVALID_JSON, 502),
@@ -157,109 +156,6 @@ def test_resolve_request_id_rules():
     assert resolve_request_id(None) != resolve_request_id(None)
     assert resolve_request_id("x" * 500) != "x" * 500
     assert resolve_request_id("") != ""
-
-
-# ── Ollama normalisation (real OllamaLLMService over a mock transport) ─
-
-
-def _ollama(handler) -> OllamaLLMService:
-    svc = OllamaLLMService(base_url="http://ollama.test")
-    svc._client = httpx.AsyncClient(
-        base_url="http://ollama.test", transport=httpx.MockTransport(handler)
-    )
-    svc._retry_backoff_s = 0
-    return svc
-
-
-@pytest.mark.asyncio
-async def test_ollama_unavailable_normalised():
-    def handler(request):
-        raise httpx.ConnectError("refused")
-
-    with pytest.raises(AppError) as ei:
-        await _ollama(handler).generate("sys", "user")
-    assert ei.value.code == ErrorCode.OLLAMA_UNAVAILABLE
-
-
-@pytest.mark.asyncio
-async def test_ollama_timeout_normalised_and_not_retried():
-    calls = []
-
-    def handler(request):
-        calls.append(1)
-        raise httpx.ReadTimeout("slow")
-
-    with pytest.raises(AppError) as ei:
-        await _ollama(handler).generate("sys", "user")
-    assert ei.value.code == ErrorCode.OLLAMA_TIMEOUT
-    assert len(calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_ollama_transient_503_retried_once_then_succeeds():
-    calls = []
-
-    def handler(request):
-        calls.append(1)
-        if len(calls) == 1:
-            return httpx.Response(503, text="busy")
-        return httpx.Response(200, json={"message": {"content": "hello"}})
-
-    assert await _ollama(handler).generate("sys", "user") == "hello"
-    assert len(calls) == 2
-
-
-@pytest.mark.asyncio
-async def test_ollama_retry_is_capped_at_one():
-    calls = []
-
-    def handler(request):
-        calls.append(1)
-        return httpx.Response(503, text="busy")
-
-    with pytest.raises(AppError):
-        await _ollama(handler).generate("sys", "user")
-    assert len(calls) == 2  # original + exactly one retry
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("status", [404, 500, 400])
-async def test_ollama_non_transient_status_not_retried(status):
-    calls = []
-
-    def handler(request):
-        calls.append(1)
-        return httpx.Response(status, text="nope")
-
-    with pytest.raises(AppError):
-        await _ollama(handler).generate("sys", "user")
-    assert len(calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_ollama_empty_response_normalised():
-    def handler(request):
-        return httpx.Response(200, json={"message": {"content": "   "}})
-
-    with pytest.raises(AppError) as ei:
-        await _ollama(handler).generate("sys", "user")
-    assert ei.value.code == ErrorCode.LLM_EMPTY_RESPONSE
-
-
-@pytest.mark.asyncio
-async def test_ollama_stream_transient_503_retried_once():
-    calls = []
-
-    def handler(request):
-        calls.append(1)
-        if len(calls) == 1:
-            return httpx.Response(503, text="busy")
-        body = '{"message":{"content":"hi"},"done":false}\n{"message":{"content":""},"done":true}\n'
-        return httpx.Response(200, text=body)
-
-    pieces = [p async for p in _ollama(handler).generate_stream("s", "u")]
-    assert pieces == ["hi"]
-    assert len(calls) == 2
 
 
 # ── Chroma normalisation ────────────────────────────────────────────

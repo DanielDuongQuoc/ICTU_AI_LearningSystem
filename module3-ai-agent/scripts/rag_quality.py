@@ -1,7 +1,7 @@
 """Phase 17 RAG quality suite (JSONL datasets). Used by ``scripts/evaluate_rag.py``.
 
 Retrieval metrics (Hit/Precision/Recall@K, MRR, nDCG@K), abstention / insufficient-context
-detection, document-isolation and source-integrity invariants, and (ollama mode only) lexical
+detection, document-isolation and source-integrity invariants, and (gemini mode only) lexical
 answer-quality proxies.  Not part of the application runtime.
 """
 
@@ -140,7 +140,7 @@ async def evaluate_cases(
             "verdict; they miss paraphrase and negation errors."
         )
     else:
-        findings.append("Answer-quality metrics were not computed (needs --answers with --mode ollama).")
+        findings.append("Answer-quality metrics were not computed (needs --answers with --mode gemini).")
     return {
         "k": k, "cases": len(rows), "sections": sections, "per_case": rows, "findings": findings,
         "invariants": {
@@ -160,8 +160,8 @@ async def run_jsonl_suite(args: argparse.Namespace) -> dict[str, Any]:
     ec.validate_rag_cases(cases, corpus)
     if args.validate_only:
         return {"validated": len(cases)}
-    if args.answers and args.mode != "ollama":
-        raise ec.DatasetError("--answers needs --mode ollama (offline mode has no real LLM).")
+    if args.answers and args.mode != "gemini":
+        raise ec.DatasetError("--answers needs --mode gemini (offline mode has no real LLM).")
     stack = ec.EvalStack(args.mode, getattr(args, "threshold", None))
     k = args.k or stack.settings.top_k
     try:

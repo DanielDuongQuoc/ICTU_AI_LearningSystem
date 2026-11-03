@@ -1,1 +1,1 @@
-# Phase 21 release-engineering tests (offline; no Docker, no Ollama).
+# Phase 21 release-engineering tests (offline; no Docker, no network).

@@ -1,10 +1,10 @@
 """Phase 3 — Vector operations service.
 
 Orchestrates the pipeline:
-    chunks → EmbeddingService → ChromaRepository
+    chunks → GeminiEmbeddingService → ChromaRepository
 
 This service sits between the API layer and the lower-level
-EmbeddingService / ChromaRepository.  It contains no HTTP or API logic.
+GeminiEmbeddingService / ChromaRepository.  It contains no HTTP or API logic.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from app.core.exceptions import AppError, ErrorCode
 from app.core.metrics import metrics
 from app.repositories.chroma_repository import ChromaRepository
 from app.schemas.document import Chunk
-from app.services.embedding_service import EmbeddingService, get_embedding_service
+from app.services.embedding_service import GeminiEmbeddingService, get_embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,10 @@ class VectorService:
     def __init__(
         self,
         *,
-        embedding_service: Optional[EmbeddingService] = None,
+        embedding_service: Optional[GeminiEmbeddingService] = None,
         chroma_repo: Optional[ChromaRepository] = None,
     ) -> None:
-        self._embedding: EmbeddingService = embedding_service or get_embedding_service()
+        self._embedding: GeminiEmbeddingService = embedding_service or get_embedding_service()
         self._repo: ChromaRepository = chroma_repo or ChromaRepository()
 
     # ── Index chunks ────────────────────────────────────────────────
@@ -73,7 +73,7 @@ class VectorService:
             raise AppError(
                 ErrorCode.INDEXING_ERROR,
                 "The vector store was built with a different embedding model; re-index is required "
-                "before adding documents (see docs/RELEASE_ENGINEERING.md).",
+                "before adding documents (delete and re-upload the stored documents).",
             )
 
 

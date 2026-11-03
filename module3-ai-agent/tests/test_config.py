@@ -8,9 +8,9 @@ def test_default_settings_valid():
     settings = get_settings()
     assert settings.app_name
     assert settings.app_port == 8003
-    assert settings.ollama_base_url.startswith("http")
-    assert settings.ollama_model
-    assert settings.ollama_embedding_model
+    assert settings.gemini_base_url.startswith("https://")
+    assert settings.gemini_model
+    assert settings.gemini_embedding_model
     assert settings.chroma_collection_name
     assert settings.chunk_size > 0
     assert settings.chunk_overlap >= 0
@@ -48,7 +48,7 @@ def test_invalid_app_env():
 
 def test_valid_app_envs():
     for env in ("development", "staging", "production", "test"):
-        s = Settings(app_env=env, ollama_model="qwen2.5:7b", ollama_embedding_model="nomic-embed-text:v1.5")  # pinned tags (Phase 21)
+        s = Settings(app_env=env)
         assert s.app_env == env
 
 
@@ -61,8 +61,10 @@ def _kw(**overrides):
 
 def test_phase9_defaults():
     s = Settings()
-    assert s.ollama_max_retries == 1
-    assert s.ollama_retry_backoff_s >= 0
+    assert s.llm_max_retries == 1
+    assert s.llm_retry_backoff_s >= 0
+    assert (s.llm_timeout, s.llm_connect_timeout, s.llm_health_timeout) == (120, 10, 5)
+    assert (s.llm_temperature, s.llm_max_output_tokens) == (0.2, 1024)
     assert s.slow_request_threshold_ms > 0
 
 
@@ -78,10 +80,17 @@ def test_phase9_defaults():
         {"max_top_k": 0},
         {"max_upload_size_mb": 0},
         {"max_context_chars": 0},
-        {"ollama_base_url": "not-a-url"},
-        {"ollama_base_url": "ftp://localhost:11434"},
-        {"ollama_model": ""},
-        {"ollama_timeout": 0},
+        {"gemini_base_url": "not-a-url"},
+        {"gemini_base_url": "ftp://localhost:1"},
+        {"gemini_model": ""},
+        {"gemini_embedding_model": " "},
+        {"llm_timeout": 0},
+        {"llm_connect_timeout": 0},
+        {"llm_health_timeout": -1},
+        {"llm_max_retries": -1},
+        {"llm_retry_backoff_s": -0.1},
+        {"llm_max_output_tokens": 0},
+        {"llm_temperature": 3},
         {"slow_request_threshold_ms": 0},
     ],
 )

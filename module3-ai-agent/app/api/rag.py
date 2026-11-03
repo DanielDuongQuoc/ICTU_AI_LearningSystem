@@ -44,7 +44,7 @@ async def retrieve(body: RAGRetrievalRequest, request: Request) -> RAGRetrievalR
     response_model=RAGAnswerResponse,
     summary="Answer a question from the document (RAG + LLM)",
     description=(
-        "Retrieves context then asks Qwen for a grounded answer. If the context is insufficient a fixed "
+        "Retrieves context then asks the Gemini model for a grounded answer. If the context is insufficient a fixed "
         "answer is returned and the LLM is not called. `sources` come from retrieval, never from the model."
     ),
     responses=error_responses(400, 404, 422, 429, 502, 503, 504),

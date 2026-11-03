@@ -1,6 +1,6 @@
 """Concurrency gate for LLM generation (Phase 16 backpressure).
 
-Caps simultaneous Ollama generation calls (``LLM_MAX_CONCURRENCY``, 0 = unlimited). A call that
+Caps simultaneous LLM generation calls (``LLM_MAX_CONCURRENCY``, 0 = unlimited). A call that
 cannot get a slot within ``LLM_QUEUE_TIMEOUT_S`` is rejected with ``SERVICE_OVERLOADED`` (503)
 instead of piling up behind the model and causing a timeout cascade. No queue system: the wait
 is a plain in-process semaphore. The semaphore is created per running event loop.
@@ -63,7 +63,7 @@ llm_gate = LLMGate()
 
 
 class EmbeddingGate:
-    """Same backpressure for Ollama embedding calls (Phase 22): ``MAX_CONCURRENT_EMBEDDINGS`` slots, 0 = unlimited.
+    """Same backpressure for embedding calls (Phase 22): ``MAX_CONCURRENT_EMBEDDINGS`` slots, 0 = unlimited.
 
     A call that cannot get a slot within ``EMBEDDING_QUEUE_TIMEOUT_S`` is rejected with ``SERVICE_OVERLOADED`` (503).
     """

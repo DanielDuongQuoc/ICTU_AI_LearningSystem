@@ -20,9 +20,5 @@ services:
         value: gemini-3.5-flash-lite
       - key: GEMINI_EMBEDDING_MODEL
         value: gemini-embedding-001
-      - key: OLLAMA_MODEL
-        value: qwen2.5:7b
-      - key: OLLAMA_EMBEDDING_MODEL
-        value: nomic-embed-text:v1.5
       - key: MIN_FREE_DISK_MB
         value: "10"

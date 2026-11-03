@@ -376,7 +376,7 @@ class EvaluationService:
                 if received_chars > limits.max_llm_output_chars:
                     raise AppError(ErrorCode.LLM_OUTPUT_REJECTED, "The language model output exceeded the allowed size.")
                 if time.perf_counter() - stats["started"] > limits.stream_max_duration_s:
-                    raise AppError(ErrorCode.OLLAMA_TIMEOUT, "Language model request timed out.")
+                    raise AppError(ErrorCode.LLM_TIMEOUT, "Language model request timed out.")
                 now_ms = (time.perf_counter() - stats["started"]) * 1000
                 if stats["first_token_ms"] is None:
                     stats["first_token_ms"] = now_ms
@@ -445,7 +445,7 @@ class EvaluationService:
         )
         last_error: Optional[AppError] = None
         for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
-            # Ollama / empty-response / invalid-JSON AppErrors propagate unchanged.
+            # Provider / empty-response / invalid-JSON AppErrors propagate unchanged.
             raw = await self._llm.generate_json(
                 system_prompt, user_prompt, required_keys=REQUIRED_KEYS
             )

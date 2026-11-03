@@ -1,9 +1,8 @@
-"""Phase 16 - LLM concurrency limit / backpressure (no real Ollama; httpx.MockTransport)."""
+"""Phase 16 - LLM concurrency limit / backpressure (real GeminiLLMService over httpx.MockTransport)."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 
 import httpx
 import pytest
@@ -11,9 +10,10 @@ import pytest
 from app.core.config import get_settings
 from app.core.exceptions import ERROR_HTTP_STATUS, AppError, ErrorCode
 from app.core.metrics import metrics
-from app.services.llm_service import OllamaLLMService
+from app.services.llm_service import GeminiLLMService
+from tests.fakes import gemini_body, gemini_llm, gemini_sse
 
-CHAT_OK = {"message": {"content": "hello"}, "done": True}
+CHAT_OK = gemini_body("hello")
 
 
 @pytest.fixture()
@@ -29,10 +29,8 @@ def limits(monkeypatch):
     metrics.reset()
 
 
-def _service(handler) -> OllamaLLMService:
-    svc = OllamaLLMService(base_url="http://ollama.test", model="m")
-    svc._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://ollama.test")
-    return svc
+def _service(handler) -> GeminiLLMService:
+    return gemini_llm(handler, model="m")
 
 
 def test_overload_error_is_503_and_documented():
@@ -113,7 +111,7 @@ async def test_failure_inside_slot_releases_it(limits):
     svc = _service(handler)
     with pytest.raises(AppError) as exc:
         await svc.generate("s", "u")
-    assert exc.value.code == ErrorCode.OLLAMA_UNAVAILABLE
+    assert exc.value.code == ErrorCode.LLM_UNAVAILABLE
     state["fail"] = False
     assert await svc.generate("s", "u") == "hello"
     await svc.close()
@@ -156,12 +154,12 @@ async def test_stream_holds_slot_until_closed(limits):
     release = asyncio.Event()
 
     async def body():
-        yield (json.dumps({"message": {"content": "hi"}, "done": False}) + "\n").encode()
+        yield gemini_sse("hi")
         await release.wait()
-        yield (json.dumps({"message": {"content": "!"}, "done": True}) + "\n").encode()
+        yield gemini_sse("!")
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if json.loads(request.content).get("stream"):
+        if "streamGenerateContent" in request.url.path:
             return httpx.Response(200, content=body())
         return httpx.Response(200, json=CHAT_OK)
 

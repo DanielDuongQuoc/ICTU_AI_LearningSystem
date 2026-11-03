@@ -2,14 +2,14 @@
 
 Pipeline
 ~~~~~~~~
-question → validate → document check → EmbeddingService.embed_text
+question → validate → document check → GeminiEmbeddingService.embed_text
 → ChromaRepository.query (filtered by document_id)
 → similarity-threshold filter → de-duplicate by chunk_id → rank
 → context construction (size-limited) → structured result
 
 ``retrieve()`` performs retrieval only and never calls a generative LLM.
 ``answer_question()`` (Phase 5) adds generation on top via the abstract
-:class:`LLMService`; RAGService never talks to Ollama directly.  The LLM only
+:class:`LLMService`; RAGService never talks to the provider directly.  The LLM only
 produces the answer text — sources always come from retrieval (ChromaDB metadata).
 
 Score semantics
@@ -36,7 +36,7 @@ from app.core.execution_trace import trace_execution
 from app.core.output_guard import enforce_no_prompt_leak
 from app.core.prompts import INSUFFICIENT_CONTEXT_ANSWER
 from app.repositories.chroma_repository import ChromaRepository
-from app.services.embedding_service import EmbeddingService, get_embedding_service
+from app.services.embedding_service import GeminiEmbeddingService, get_embedding_service
 from app.services.llm_service import LLMService, get_llm_service
 
 logger = logging.getLogger(__name__)
@@ -115,12 +115,12 @@ def build_context(
 
 
 class RAGService:
-    """Retrieval orchestration on top of EmbeddingService + ChromaRepository."""
+    """Retrieval orchestration on top of GeminiEmbeddingService + ChromaRepository."""
 
     def __init__(
         self,
         *,
-        embedding_service: Optional[EmbeddingService] = None,
+        embedding_service: Optional[GeminiEmbeddingService] = None,
         chroma_repo: Optional[ChromaRepository] = None,
         llm_service: Optional[LLMService] = None,
         similarity_threshold: Optional[float] = None,
@@ -326,7 +326,7 @@ class RAGService:
         except Exception as exc:
             logger.error("LLM generation failed request_id=%s: %s", request_id, exc, exc_info=True)
             raise AppError(
-                ErrorCode.OLLAMA_GENERATION_ERROR, "Answer generation failed."
+                ErrorCode.LLM_GENERATION_ERROR, "Answer generation failed."
             ) from exc
         llm_ms = (time.perf_counter() - t0) * 1000
 

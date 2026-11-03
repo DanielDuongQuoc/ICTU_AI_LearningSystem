@@ -15,11 +15,11 @@ passages of its document:
 
 ``--mode offline`` replays the dataset's *reference* questions as the LLM output.  That is a
 harness self-check (it proves the checks and the service validation work end-to-end); it says
-nothing about model quality.  ``--mode ollama`` uses the real model.
+nothing about model quality.  ``--mode gemini`` uses the real model.
 
 Usage::
 
-    python scripts/evaluate_question_generation.py [--mode offline|ollama] [--out-dir DIR]
+    python scripts/evaluate_question_generation.py [--mode offline|gemini] [--out-dir DIR]
         [--min groundedness_rate=0.8 ...] [--validate-only]
 """
 
@@ -201,7 +201,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
 def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Evaluate question-generation quality.")
     p.add_argument("--dataset", default=str(DEFAULT_DATASET))
-    p.add_argument("--mode", choices=["offline", "ollama"], default="offline")
+    p.add_argument("--mode", choices=["offline", "gemini"], default="offline")
     p.add_argument("--out-dir", default=str(ec.DEFAULT_REPORT_DIR))
     p.add_argument("--min", action="append", metavar="METRIC=VALUE")
     p.add_argument("--threshold", type=float, default=None, help="Override SIMILARITY_THRESHOLD (recorded)")

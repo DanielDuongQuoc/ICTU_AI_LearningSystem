@@ -54,11 +54,11 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error("ChromaDB initialisation failed (starting degraded): %s", exc)
 
-    from app.services.ollama_checker import check_ollama_health
+    from app.services.provider_checker import check_provider_health
 
-    if not await check_ollama_health():
+    if not await check_provider_health():
         logger.warning(
-            "Ollama is not reachable at startup (starting degraded); "
+            "Gemini API is not reachable or GEMINI_API_KEY is missing (starting degraded); "
             "LLM-backed endpoints will fail until it is available."
         )
 
@@ -91,7 +91,7 @@ def create_app() -> FastAPI:
         description=(
             "Module 3 - AI Agent for ICTU_AI_LearningSystem. "
             "Provides RAG-based document indexing, question generation, "
-            "and student answer evaluation powered by Ollama/Qwen."
+            "and student answer evaluation powered by Google Gemini."
         ),
         version=MODULE_VERSION,
         docs_url="/docs",

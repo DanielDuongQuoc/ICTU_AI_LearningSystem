@@ -19,11 +19,11 @@ Usage::
 
     python scripts/evaluate_rag.py [--dataset tests/data/rag_eval.json] [--k 5] [--output rag_eval_results.json]
 
-Requires a running Ollama with the embedding model pulled (the app's real configuration is used).
+Gemini mode requires GEMINI_API_KEY (the app's real configuration is used).
 
 Phase 17 suite (a ``.jsonl`` dataset - the default; implemented in ``scripts/rag_quality.py``)::
 
-    python scripts/evaluate_rag.py [--mode offline|ollama] [--k 5] [--out-dir evaluation/reports]
+    python scripts/evaluate_rag.py [--mode offline|gemini] [--k 5] [--out-dir evaluation/reports]
                                    [--answers] [--min hit@5=0.9 ...] [--validate-only]
 
 ``--mode offline`` (default) uses a lexical test embedder and never calls a model: it measures the
@@ -162,11 +162,11 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
 
     from app.core.config import get_settings
     from app.repositories.chroma_repository import ChromaRepository, init_chroma
-    from app.services.embedding_service import EmbeddingService
+    from app.services.embedding_service import GeminiEmbeddingService
 
     dataset = load_dataset(args.dataset)
     k = args.k or get_settings().top_k
-    embedding = EmbeddingService()
+    embedding = GeminiEmbeddingService()
     tmp_dir: Optional[str] = None
     try:
         if args.use_app_store:
@@ -198,10 +198,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--output", default=None, help="Legacy (.json dataset): write the report as JSON")
     parser.add_argument("--use-app-store", action="store_true",
                         help="Legacy (.json dataset): use the application's ChromaDB instead of a temporary one")
-    parser.add_argument("--mode", choices=["offline", "ollama"], default="offline")
+    parser.add_argument("--mode", choices=["offline", "gemini"], default="offline")
     parser.add_argument("--out-dir", default=str(ROOT / "evaluation" / "reports"),
                         help="Phase 17: where JSON/Markdown reports are written (never overwritten)")
-    parser.add_argument("--answers", action="store_true", help="Phase 17: also generate/score answers (ollama mode)")
+    parser.add_argument("--answers", action="store_true", help="Phase 17: also generate/score answers (gemini mode)")
     parser.add_argument("--min", action="append", metavar="METRIC=VALUE",
                         help="Phase 17: exit 3 if a metric is below VALUE (repeatable)")
     parser.add_argument("--validate-only", action="store_true", help="Phase 17: only validate the dataset")

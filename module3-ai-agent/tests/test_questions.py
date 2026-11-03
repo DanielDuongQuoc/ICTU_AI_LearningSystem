@@ -1,7 +1,7 @@
 """Phase 6 — Question generation tests.
 
-EmbeddingService, ChromaRepository (FakeRepo) and LLMService are mocked, so the
-backend logic is tested without Ollama or ChromaDB.
+GeminiEmbeddingService, ChromaRepository (FakeRepo) and LLMService are mocked, so the
+backend logic is tested without the Gemini API or ChromaDB.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def q(question: str, answer: str = "An expected answer.", difficulty="medium",
 
 def make_llm(response: Any = None, side_effect: Any = None) -> MagicMock:
     llm = MagicMock(spec=LLMService)
-    llm.model_name = "qwen-test"
+    llm.model_name = "gemini-test"
     llm.generate_json = AsyncMock(
         return_value=response if response is not None else {"questions": [q("What is machine learning?")]},
         side_effect=side_effect,
@@ -236,12 +236,12 @@ async def test_llm_unexpected_error_wrapped_without_details() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ollama_errors_propagate() -> None:
-    llm = make_llm(side_effect=AppError(ErrorCode.OLLAMA_UNAVAILABLE, "down"))
+async def test_provider_errors_propagate() -> None:
+    llm = make_llm(side_effect=AppError(ErrorCode.LLM_UNAVAILABLE, "down"))
     svc, _, _ = make_stack(default_hits(), llm)
     with pytest.raises(AppError) as exc:
         await gen(svc)
-    assert exc.value.code == ErrorCode.OLLAMA_UNAVAILABLE
+    assert exc.value.code == ErrorCode.LLM_UNAVAILABLE
 
 
 # ── Duplicates ──────────────────────────────────────────────────────
@@ -550,8 +550,8 @@ async def test_api_document_not_found(client) -> None:
 
 
 @pytest.mark.asyncio
-async def test_api_ollama_down_clean_error(client) -> None:
-    llm = make_llm(side_effect=AppError(ErrorCode.OLLAMA_UNAVAILABLE, "Ollama server is not reachable."))
+async def test_api_provider_down_clean_error(client) -> None:
+    llm = make_llm(side_effect=AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API is not reachable."))
     svc, _, _ = make_stack(default_hits(), llm)
     with patch("app.api.questions._get_question_service", return_value=svc):
         resp = await client.post(URL, json={"document_id": DOC_A})

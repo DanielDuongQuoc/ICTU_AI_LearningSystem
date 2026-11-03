@@ -1,6 +1,6 @@
 """Phase 20 - ChromaDB / embedding / PDF / filesystem failure injection, partial failure, idempotency, recovery.
 
-Real in-memory ChromaDB + fake embedding + recording LLM (tests.fakes). Nothing here needs Ollama.
+Real in-memory ChromaDB + fake embedding + recording LLM (tests.fakes). Nothing here needs the network.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ async def test_retrieval_ok_then_llm_failure_is_controlled_and_recovers(client, 
 
     async def flaky(*a, **k):
         if state["fail"]:
-            raise AppError(ErrorCode.OLLAMA_UNAVAILABLE, "Ollama server is not reachable.")
+            raise AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API is not reachable.")
         return await real(*a, **k)
 
     monkeypatch.setattr(stack.llm, "generate_json", flaky)

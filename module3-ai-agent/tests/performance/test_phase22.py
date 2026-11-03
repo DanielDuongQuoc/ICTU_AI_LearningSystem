@@ -1,4 +1,4 @@
-"""Phase 22 - performance, capacity and scalability tests (offline; no Ollama).
+"""Phase 22 - performance, capacity and scalability tests (offline; Gemini is faked).
 
 These verify behaviour (bounds, equivalence, classification), not machine-dependent speed, so they are stable in CI.
 Measured numbers live in docs/PERFORMANCE.md and come from ``scripts.benchmark_scale``.
@@ -9,19 +9,15 @@ from __future__ import annotations
 import asyncio
 import json
 import random
-import re
 
-import httpx
 import pytest
 
 from app.core.concurrency import embedding_gate, llm_gate
 from app.core.config import Settings, get_settings
-from app.core.exceptions import AppError, ErrorCode
 from app.schemas.document import ExtractedPage
 from app.services import chunk_service
 from app.services.chunk_service import _join_units, _metadata_for_pages, _overlap_units, _units_from_page
-from app.services.embedding_service import EmbeddingService
-from scripts import benchmark_scale, perf_regression
+from scripts import perf_regression
 from tests.fakes import Stack, sample_pdf_bytes
 
 
@@ -103,91 +99,7 @@ def test_chunking_scales_roughly_linearly_with_input():
     assert large < small * 8 * 4, f"chunking looks super-linear: 10 pages {small:.4f}s, 80 pages {large:.4f}s"
 
 
-# ------------------------------------------------------------------ embedding batching + concurrency bound
-def _embed_service(handler) -> EmbeddingService:
-    svc = EmbeddingService(base_url="http://ollama.test", model="m:1")
-    svc._client = httpx.AsyncClient(base_url="http://ollama.test", transport=httpx.MockTransport(handler))
-    return svc
-
-
-@pytest.mark.asyncio
-async def test_embeddings_are_sent_in_bounded_batches_and_keep_order(monkeypatch):
-    monkeypatch.setenv("EMBEDDING_BATCH_SIZE", "10")
-    get_settings.cache_clear()
-    sizes: list[int] = []
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        inputs = json.loads(request.content)["input"]
-        sizes.append(len(inputs))
-        return httpx.Response(200, json={"embeddings": [[float(t)] for t in inputs]})
-
-    svc = _embed_service(handler)
-    texts = [str(i) for i in range(1, 36)]
-    vectors = await svc.embed_documents(texts)
-    assert sizes == [10, 10, 10, 5] and max(sizes) <= 10
-    assert vectors == [[float(t)] for t in texts], "order and count must be preserved across batches"
-    await svc.close()
-
-
-@pytest.mark.asyncio
-async def test_small_input_is_still_a_single_request(monkeypatch):
-    calls = []
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        n = len(json.loads(request.content)["input"])
-        calls.append(n)
-        return httpx.Response(200, json={"embeddings": [[1.0]] * n})
-
-    svc = _embed_service(handler)
-    await svc.embed_documents(["a", "b", "c"])
-    assert calls == [3]
-    await svc.close()
-
-
-@pytest.mark.asyncio
-async def test_embedding_concurrency_never_exceeds_the_configured_limit(monkeypatch):
-    monkeypatch.setenv("MAX_CONCURRENT_EMBEDDINGS", "2")
-    monkeypatch.setenv("EMBEDDING_QUEUE_TIMEOUT_S", "10")
-    get_settings.cache_clear()
-    active = peak = 0
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal active, peak
-        active += 1
-        peak = max(peak, active)
-        await asyncio.sleep(0.02)
-        active -= 1
-        return httpx.Response(200, json={"embeddings": [[1.0]]})
-
-    svc = _embed_service(handler)
-    await asyncio.gather(*[svc.embed_text(f"q{i}") for i in range(12)])
-    assert peak == 2
-    await svc.close()
-
-
-@pytest.mark.asyncio
-async def test_embedding_overload_is_rejected_with_503_not_queued_forever(monkeypatch):
-    monkeypatch.setenv("MAX_CONCURRENT_EMBEDDINGS", "1")
-    monkeypatch.setenv("EMBEDDING_QUEUE_TIMEOUT_S", "0.05")
-    get_settings.cache_clear()
-    release = asyncio.Event()
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        await release.wait()
-        return httpx.Response(200, json={"embeddings": [[1.0]]})
-
-    svc = _embed_service(handler)
-    first = asyncio.create_task(svc.embed_text("slow"))
-    await asyncio.sleep(0.01)
-    with pytest.raises(AppError) as err:
-        await svc.embed_text("second")
-    assert err.value.code == ErrorCode.SERVICE_OVERLOADED
-    release.set()
-    assert await first == [1.0]
-    assert await svc.embed_text("after") == [1.0], "service recovers once the slot is free"
-    await svc.close()
-
-
+# ------------------------------------------------------------------ embedding gate
 @pytest.mark.asyncio
 async def test_unlimited_embedding_gate_does_not_block(monkeypatch):
     monkeypatch.setenv("MAX_CONCURRENT_EMBEDDINGS", "0")
@@ -270,31 +182,6 @@ def test_cli_exit_codes_distinguish_failure_classes(tmp_path):
     assert perf_regression.main([str(good), str(tmp_path / "missing.json")]) == 3
 
 
-# ------------------------------------------------------------------ benchmark helpers
-def test_percentile_nearest_rank_and_no_data():
-    assert perf_regression is not None
-    assert benchmark_scale.percentile([], 95) is None
-    assert benchmark_scale.percentile(list(range(1, 101)), 95) == 95
-    assert benchmark_scale.percentile([5], 99) == 5
-
-
-def test_hash_embedding_is_deterministic_and_unit_length():
-    a = benchmark_scale.hash_embed("machine learning data")
-    assert a == benchmark_scale.hash_embed("machine learning data")
-    assert abs(sum(v * v for v in a) - 1.0) < 1e-9
-
-
-def test_benchmark_run_keeps_document_isolation_and_leaves_no_orphans():
-    result = benchmark_scale.run([2, 3], queries=3, extra_documents=2)
-    meta = result["metadata"]
-    assert meta["embedding"] == "fake-hash-64" and meta["dataset_version"] and meta["run_id"]
-    assert all(d["wrong_document_hits"] == 0 and d["retrieval_hits_total"] > 0 for d in result["documents"])
-    life = result["lifecycle"]
-    assert life["orphans_after_delete"] == 0 and life["chunks_removed"] == life["expected_removed"]
-    assert result["growth"][-1]["chunks"] > result["growth"][0]["chunks"]
-    assert not re.search(r"(token|secret|password)", json.dumps(meta), re.I)
-
-
 # ------------------------------------------------------------------ load / burst through the real API (fakes behind it)
 TEXT = "Zebracorn systems explain machine learning. Zebracorn models learn patterns from data."
 
@@ -332,7 +219,7 @@ async def test_llm_burst_over_capacity_is_rejected_cleanly_then_recovers(client,
                "max_score": 10}
     original = stack.llm.generate_json
 
-    async def slow(*a, **kw):  # the real OllamaLLMService takes the slot inside its call; the fake does not
+    async def slow(*a, **kw):  # the real GeminiLLMService takes the slot inside its call; the fake does not
         async with llm_gate.slot():
             await asyncio.sleep(0.25)
             return await original(*a, **kw)

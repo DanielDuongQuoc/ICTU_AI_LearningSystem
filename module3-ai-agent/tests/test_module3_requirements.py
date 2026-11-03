@@ -198,7 +198,7 @@ class MatrixLLM(RecordingLLM):
         self.calls.append(("json", system_prompt, user_prompt))
         self.gen_calls += 1
         if self.fail_from_call is not None and self.gen_calls >= self.fail_from_call:
-            raise AppError(ErrorCode.OLLAMA_TIMEOUT, "model timed out")
+            raise AppError(ErrorCode.LLM_TIMEOUT, "model timed out")
         diff = re.search(r"Difficulty: (\w+)", user_prompt).group(1)
         qtype = re.search(r"Question type: (\w+)", user_prompt).group(1)
         out = []

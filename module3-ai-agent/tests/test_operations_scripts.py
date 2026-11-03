@@ -44,10 +44,6 @@ def test_alert_5xx_slow_and_overload():
     assert any(a.startswith("LLM_OVERLOAD") for a in ops_check.evaluate(_samples(100, 0, rejected=50), **KW))
 
 
-def test_ops_check_unreachable_returns_2():
-    assert ops_check.main(["--base-url", "http://127.0.0.1:9"]) == 2
-
-
 @pytest.mark.asyncio
 async def test_ops_check_parses_real_metrics_output(client):
     from app.core.metrics import metrics

@@ -4,7 +4,7 @@
 
 Flow: health -> ready -> upload -> get -> retrieve -> generate question -> evaluate ->
 stream evaluation -> delete -> verify deletion. Uses a generated sample PDF. It needs a live
-Ollama (question generation / evaluation call Qwen), so it is NOT part of ``pytest``; the
+the Gemini API (question generation / evaluation call the model), so it is NOT part of ``pytest``; the
 offline suite runs the same steps against fakes via ``run_smoke``.
 Module 1 / Module 2 are not involved (their contracts are unconfirmed): this is a Module 3 smoke test.
 """

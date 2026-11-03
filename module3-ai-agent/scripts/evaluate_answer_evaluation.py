@@ -18,11 +18,11 @@ a-priori by the dataset author and have not been calibrated against human grader
 
 ``--mode offline`` makes the "LLM" return the band midpoint (and the expected label), so the run
 is a HARNESS SELF-CHECK of the pipeline and metrics; it says nothing about model grading quality.
-``--mode ollama`` uses the real model.
+``--mode gemini`` uses the real model.
 
 Usage::
 
-    python scripts/evaluate_answer_evaluation.py [--mode offline|ollama] [--out-dir DIR]
+    python scripts/evaluate_answer_evaluation.py [--mode offline|gemini] [--out-dir DIR]
         [--min within_band_rate=0.7 ...] [--validate-only]
 """
 
@@ -182,7 +182,7 @@ async def evaluate(cases: list[dict[str, Any]], stack: Any, corpus: dict[str, An
         findings.append(
             "INSUFFICIENT_CONTEXT outcomes depend on the embedding model and SIMILARITY_THRESHOLD; in "
             "offline mode they come from the lexical test embedder and are NOT representative of the "
-            "production embedding model (nomic-embed-text). Re-run with --mode ollama to verify."
+            "production embedding model (Gemini). Re-run with --mode gemini to verify."
         )
     if label_score_incons:
         findings.append(
@@ -240,7 +240,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
 def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Evaluate answer-evaluation (grading) quality.")
     p.add_argument("--dataset", default=str(DEFAULT_DATASET))
-    p.add_argument("--mode", choices=["offline", "ollama"], default="offline")
+    p.add_argument("--mode", choices=["offline", "gemini"], default="offline")
     p.add_argument("--out-dir", default=str(ec.DEFAULT_REPORT_DIR))
     p.add_argument("--threshold", type=float, default=None, help="Override SIMILARITY_THRESHOLD (recorded)")
     p.add_argument("--min", action="append", metavar="METRIC=VALUE")

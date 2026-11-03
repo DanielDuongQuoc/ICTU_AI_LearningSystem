@@ -1,6 +1,6 @@
 """Phase 7 — Answer evaluation tests.
 
-EmbeddingService, ChromaRepository (FakeRepo) and LLMService are mocked: no Ollama /
+GeminiEmbeddingService, ChromaRepository (FakeRepo) and LLMService are mocked: no Gemini API /
 ChromaDB required.
 """
 
@@ -51,7 +51,7 @@ def llm_result(**over: Any) -> dict[str, Any]:
 
 def make_llm(response: Any = None, side_effect: Any = None) -> MagicMock:
     llm = MagicMock(spec=LLMService)
-    llm.model_name = "qwen-test"
+    llm.model_name = "gemini-test"
     llm.generate_json = AsyncMock(
         return_value=response if response is not None else llm_result(),
         side_effect=side_effect,
@@ -262,12 +262,12 @@ async def test_unexpected_llm_error_wrapped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ollama_errors_propagate() -> None:
-    llm = make_llm(side_effect=AppError(ErrorCode.OLLAMA_TIMEOUT, "slow"))
+async def test_provider_errors_propagate() -> None:
+    llm = make_llm(side_effect=AppError(ErrorCode.LLM_TIMEOUT, "slow"))
     svc, _ = make_stack(default_hits(), llm)
     with pytest.raises(AppError) as exc:
         await ev(svc)
-    assert exc.value.code == ErrorCode.OLLAMA_TIMEOUT
+    assert exc.value.code == ErrorCode.LLM_TIMEOUT
 
 
 # ── Score ───────────────────────────────────────────────────────────
@@ -535,7 +535,7 @@ async def test_api_document_not_found_and_llm_down(client) -> None:
         resp = await client.post(URL, json=payload(document_id=UNKNOWN))
     assert resp.status_code == 404 and resp.json()["error"]["code"] == "DOCUMENT_NOT_FOUND"
 
-    llm = make_llm(side_effect=AppError(ErrorCode.OLLAMA_UNAVAILABLE, "Ollama server is not reachable."))
+    llm = make_llm(side_effect=AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API is not reachable."))
     svc, _ = make_stack(default_hits(), llm)
     with patch("app.api.evaluations._get_evaluation_service", return_value=svc):
         resp = await client.post(URL, json=payload())

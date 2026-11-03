@@ -129,7 +129,7 @@ def test_compose_hardening():
     dc = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     assert "no-new-privileges:true" in dc
     assert re.search(r"cap_drop:\s*\n\s*- ALL", dc)
-    assert "127.0.0.1:11434:11434" in dc              # model server not exposed on all interfaces
+    assert "ollama" not in dc.lower()                  # no self-hosted model server any more
 
 
 def test_default_config_is_safe():

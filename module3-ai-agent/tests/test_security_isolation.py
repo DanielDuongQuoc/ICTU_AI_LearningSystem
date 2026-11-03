@@ -1,6 +1,6 @@
 ﻿"""Phase 11: document isolation, prompt-injection defence, backend-controlled metadata, limits.
 
-Runs the real API + real in-memory ChromaDB with a recording fake LLM (no Ollama).
+Runs the real API + real in-memory ChromaDB with a recording fake LLM (no network).
 """
 
 from __future__ import annotations

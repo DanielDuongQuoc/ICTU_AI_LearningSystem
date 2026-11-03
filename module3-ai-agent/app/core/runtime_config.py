@@ -86,9 +86,9 @@ def current() -> EffectiveConfig:
     """The configuration derived from the current settings."""
     s = get_settings()
     return EffectiveConfig(
-        version_id=CONFIG_VERSION_ID, source="env", llm_provider="ollama",
-        llm_model=s.ollama_model, temperature=s.ollama_temperature, num_predict=s.ollama_num_predict,
-        embedding_model=s.ollama_embedding_model, top_k=s.top_k,
+        version_id=CONFIG_VERSION_ID, source="env", llm_provider="gemini",
+        llm_model=s.gemini_model, temperature=s.llm_temperature, num_predict=s.llm_max_output_tokens,
+        embedding_model=s.gemini_embedding_model, top_k=s.top_k,
         similarity_threshold=s.similarity_threshold, max_context_chars=s.max_context_chars,
         chunk_size=s.chunk_size, chunk_overlap=s.chunk_overlap,
         prompt_versions=tuple(sorted(registry.DEFAULT_PROMPT_VERSIONS.items())),

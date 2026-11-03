@@ -11,25 +11,19 @@ import pytest
 from app.core.config import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
-PINNED = {"ollama_model": "qwen2.5:7b", "ollama_embedding_model": "nomic-embed-text:v1.5"}
+PROD = {"min_free_disk_mb": 10}
 
 
 # --------------------------------------------------------------------------------- production config
-@pytest.mark.parametrize("llm,emb", [
-    ("qwen2.5:latest", "nomic-embed-text:v1.5"),
-    ("qwen2.5", "nomic-embed-text:v1.5"),
-    ("qwen2.5:7b", "nomic-embed-text"),
-    ("qwen2.5:7b", "nomic-embed-text:latest"),
-])
-def test_production_rejects_mutable_or_untagged_models(llm, emb):
-    with pytest.raises(ValueError, match="(?i)non-'latest' tag"):
-        Settings(_env_file=None, app_env="production", ollama_model=llm, ollama_embedding_model=emb)
-
-
-def test_production_accepts_pinned_models_and_other_envs_keep_defaults():
-    assert Settings(_env_file=None, app_env="production", **PINNED).app_env == "production"
+def test_render_production_configuration_validates():
+    s = Settings(_env_file=None, app_env="production", log_level="INFO", gemini_api_key="x", min_free_disk_mb=10)  # = render.yaml
+    assert s.app_env == "production" and s.gemini_model and s.gemini_embedding_model
     for env in ("development", "test", "staging"):
-        assert Settings(_env_file=None, app_env=env).ollama_embedding_model == "nomic-embed-text"
+        assert Settings(_env_file=None, app_env=env).gemini_embedding_model == "gemini-embedding-001"
+
+
+def test_production_starts_without_api_key_but_is_degraded_not_invalid():
+    assert Settings(_env_file=None, app_env="production", gemini_api_key="").gemini_api_key == ""
 
 
 @pytest.mark.parametrize("override,msg", [
@@ -38,13 +32,13 @@ def test_production_accepts_pinned_models_and_other_envs_keep_defaults():
     ({"chunk_overlap": 900, "chunk_size": 800}, "CHUNK_OVERLAP"),
     ({"similarity_threshold": 1.5}, "similarity_threshold"),
     ({"max_upload_size_mb": -1}, "MAX_UPLOAD_SIZE_MB"),
-    ({"ollama_timeout": 0}, "OLLAMA_TIMEOUT"),
-    ({"ollama_base_url": "not-a-url"}, "OLLAMA_BASE_URL"),
+    ({"llm_timeout": 0}, "LLM_TIMEOUT"),
+    ({"gemini_base_url": "not-a-url"}, "GEMINI_BASE_URL"),
     ({"top_k": 0}, "TOP_K"),
 ])
 def test_insecure_or_impossible_production_configuration_fails_fast(override, msg):
     with pytest.raises(ValueError, match=msg):
-        Settings(_env_file=None, app_env="production", **PINNED, **override)
+        Settings(_env_file=None, app_env="production", **PROD, **override)
 
 
 def test_invalid_app_env_and_port_type_fail():
@@ -57,7 +51,7 @@ def test_invalid_app_env_and_port_type_fail():
 def test_config_errors_never_echo_secret_values():
     secret = "-".join(["probe", "value", "y" * 30])
     with pytest.raises(ValueError) as e:
-        Settings(_env_file=None, app_env="production", **PINNED, gemini_api_key=secret, cors_allowed_origins="*")
+        Settings(_env_file=None, app_env="production", **PROD, gemini_api_key=secret, cors_allowed_origins="*")
     assert secret not in str(e.value) and secret not in repr(e.value)
 
 
@@ -132,7 +126,7 @@ def test_dockerfile_runs_non_root_without_secrets_and_with_writable_dirs():
     assert "HEALTHCHECK" in text and "EXPOSE 8003" in text and "CMD" in text
 
 
-def test_compose_persists_every_state_directory_and_gates_on_ollama_health():
+def test_compose_persists_every_state_directory():
     import yaml
 
     compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
@@ -140,9 +134,9 @@ def test_compose_persists_every_state_directory_and_gates_on_ollama_health():
     mounts = " ".join(map(str, api["volumes"]))
     for target in ("/app/data/chroma", "/app/uploads"):
         assert target in mounts, target
-    assert api["depends_on"]["ollama"]["condition"] == "service_healthy"
+    assert "depends_on" not in api and "ollama" not in compose["services"]
     assert api["healthcheck"]["test"] and api["stop_grace_period"]
-    assert set(compose["volumes"]) >= {"chroma_data", "uploads_data", "ollama_data"}
+    assert set(compose["volumes"]) >= {"chroma_data", "uploads_data"}
 
 
 def test_ignore_rules_keep_secrets_and_data_out_of_git_and_image():

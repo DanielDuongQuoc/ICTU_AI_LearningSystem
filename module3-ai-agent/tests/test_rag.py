@@ -1,7 +1,7 @@
 """Phase 4 — RAG retrieval tests.
 
-EmbeddingService and ChromaRepository are mocked: these tests verify the
-orchestration logic only.  No Ollama / ChromaDB required.
+GeminiEmbeddingService and ChromaRepository are mocked: these tests verify the
+orchestration logic only.  No Gemini API / ChromaDB required.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import pytest
 
 from app.core.exceptions import AppError, ErrorCode
 from app.repositories.chroma_repository import ChromaRepository
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_service import GeminiEmbeddingService
 from app.services.rag_service import RAGService, build_context, deduplicate
 
 
@@ -63,7 +63,7 @@ class FakeRepo:
 
 
 def make_embedding() -> MagicMock:
-    emb = MagicMock(spec=EmbeddingService)
+    emb = MagicMock(spec=GeminiEmbeddingService)
     emb.embed_text = AsyncMock(return_value=[0.1, 0.2, 0.3])
     return emb
 
@@ -350,7 +350,7 @@ async def test_source_metadata_preserved() -> None:
 
 @pytest.mark.asyncio
 async def test_no_llm_called() -> None:
-    emb = MagicMock(spec=EmbeddingService)
+    emb = MagicMock(spec=GeminiEmbeddingService)
     emb.embed_text = AsyncMock(return_value=[0.1])
     repo = MagicMock(spec=ChromaRepository)
     repo.document_exists.return_value = True
@@ -375,7 +375,7 @@ def test_rag_service_has_no_llm_dependency() -> None:
     import app.services.rag_service as mod
 
     src = open(mod.__file__, encoding="utf-8").read().lower()
-    for forbidden in ("ollama_model", "/api/generate", "/api/chat", "qwen", "openai", "gemini"):
+    for forbidden in ("gemini_model", "generateContent", "/api/chat", "qwen", "openai", "httpx"):
         assert forbidden not in src.replace("no generative llm", ""), forbidden
 
 
@@ -592,11 +592,11 @@ async def test_answer_rag_errors_propagate_without_llm() -> None:
 
 @pytest.mark.asyncio
 async def test_answer_llm_app_error_propagates() -> None:
-    llm = make_llm(side_effect=AppError(ErrorCode.OLLAMA_UNAVAILABLE, "down"))
+    llm = make_llm(side_effect=AppError(ErrorCode.LLM_UNAVAILABLE, "down"))
     svc, _, _ = make_rag([hit("c1", 0.9)], llm)
     with pytest.raises(AppError) as exc:
         await svc.answer_question("A", "q")
-    assert exc.value.code == ErrorCode.OLLAMA_UNAVAILABLE
+    assert exc.value.code == ErrorCode.LLM_UNAVAILABLE
 
 
 @pytest.mark.asyncio
@@ -605,7 +605,7 @@ async def test_answer_llm_unexpected_error_wrapped() -> None:
     svc, _, _ = make_rag([hit("c1", 0.9)], llm)
     with pytest.raises(AppError) as exc:
         await svc.answer_question("A", "q")
-    assert exc.value.code == ErrorCode.OLLAMA_GENERATION_ERROR
+    assert exc.value.code == ErrorCode.LLM_GENERATION_ERROR
     assert "boom" not in exc.value.message
 
 
@@ -660,11 +660,11 @@ async def test_api_answer_insufficient(client) -> None:
 
 @pytest.mark.asyncio
 async def test_api_answer_llm_down_returns_clean_error(client) -> None:
-    llm = make_llm(side_effect=AppError(ErrorCode.OLLAMA_UNAVAILABLE, "Ollama server is not reachable."))
+    llm = make_llm(side_effect=AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API is not reachable."))
     svc, _, _ = make_rag([hit("c1", 0.9)], llm)
     with patch("app.api.rag._get_rag_service", return_value=svc):
         resp = await client.post("/api/rag/answer", json={"document_id": "A", "question": "q"})
     assert resp.status_code == 503
     body = resp.json()
-    assert body["error"]["code"] == ErrorCode.OLLAMA_UNAVAILABLE
+    assert body["error"]["code"] == ErrorCode.LLM_UNAVAILABLE
     assert "Traceback" not in str(body)

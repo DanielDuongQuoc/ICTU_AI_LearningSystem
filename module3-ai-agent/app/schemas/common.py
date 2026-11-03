@@ -14,10 +14,10 @@ class ErrorResponse(BaseModel):
 
 class HealthCheckResponse(BaseModel):
     status: str = Field(..., description="ok or degraded")
-    ollama: bool = Field(..., description="True if Ollama is reachable")
+    ollama: bool = Field(..., description="Legacy name: True if the LLM provider (Gemini API) is reachable")
     chromadb: bool = Field(..., description="True if ChromaDB is operational")
     version: str = Field(..., description="API version string")
     services: dict[str, str] = Field(
         default_factory=dict,
-        description="Per-dependency status (api, chroma, ollama, model): ok or error",
+        description="Per-dependency status (api, chroma, ollama = LLM provider (legacy name), model): ok or error",
     )

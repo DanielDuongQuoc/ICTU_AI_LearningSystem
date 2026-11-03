@@ -12,12 +12,10 @@ import logging
 from typing import Any, AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 from app.core.exceptions import AppError, ErrorCode
 from app.services.evaluation_service import EvaluationService
-from app.services.llm_service import OllamaLLMService
 from app.services.rag_service import RAGService
 from app.utils.sse import done_event, error_event, format_sse, status_event, token_event
 from tests.test_evaluation import (
@@ -179,7 +177,7 @@ async def test_stream_event_format(client) -> None:
     for block in resp.text.split("\n\n")[:-1]:
         assert block.startswith("data: ") and "\n" not in block
     assert_contract(parse_sse(resp.text))
-    # no raw Ollama objects leak to the client
+    # no raw provider objects leak to the client
     assert "created_at" not in resp.text and '"model"' not in resp.text
 
 
@@ -289,15 +287,15 @@ async def test_stream_empty_body_yields_error_event(client) -> None:
     assert errors_of(events)[0]["code"] == "EMPTY_DOCUMENT_ID"
 
 
-# ── LLM / Ollama failures ───────────────────────────────────────────
+# ── LLM provider failures ───────────────────────────────────────────
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("code", [
-    ErrorCode.OLLAMA_TIMEOUT, ErrorCode.OLLAMA_UNAVAILABLE,
-    ErrorCode.OLLAMA_MODEL_NOT_FOUND, ErrorCode.LLM_EMPTY_RESPONSE,
+    ErrorCode.LLM_TIMEOUT, ErrorCode.LLM_UNAVAILABLE,
+    ErrorCode.LLM_MODEL_NOT_FOUND, ErrorCode.LLM_EMPTY_RESPONSE,
 ])
-async def test_stream_ollama_errors(client, code: str) -> None:
+async def test_stream_provider_errors(client, code: str) -> None:
     resp, _, _ = await run(client, [([], AppError(code, "safe message"))])
     events = parse_sse(resp.text)
     assert_contract(events)
@@ -306,8 +304,8 @@ async def test_stream_ollama_errors(client, code: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_ollama_timeout(client) -> None:
-    resp, _, _ = await run(client, [(["{\"sco"], AppError(ErrorCode.OLLAMA_TIMEOUT, "timed out"))])
+async def test_stream_provider_timeout(client) -> None:
+    resp, _, _ = await run(client, [(["{\"sco"], AppError(ErrorCode.LLM_TIMEOUT, "timed out"))])
     events = parse_sse(resp.text)
     assert_contract(events)
     assert [e["type"] for e in events if e["type"] in ("token", "error", "done")] == [
@@ -316,8 +314,8 @@ async def test_stream_ollama_timeout(client) -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_ollama_unavailable(client) -> None:
-    resp, _, _ = await run(client, [([], AppError(ErrorCode.OLLAMA_UNAVAILABLE, "not reachable"))])
+async def test_stream_provider_unavailable(client) -> None:
+    resp, _, _ = await run(client, [([], AppError(ErrorCode.LLM_UNAVAILABLE, "not reachable"))])
     assert errors_of(parse_sse(resp.text))[0]["code"] == "OLLAMA_UNAVAILABLE"
 
 
@@ -509,7 +507,7 @@ async def test_stream_logs_first_token_latency(caplog) -> None:
     assert STUDENT not in line
 
     llm2 = make_llm()
-    set_stream(llm2, [([], AppError(ErrorCode.OLLAMA_UNAVAILABLE, "down"))])
+    set_stream(llm2, [([], AppError(ErrorCode.LLM_UNAVAILABLE, "down"))])
     svc2, _ = make_stack(default_hits(), llm2)
     caplog.clear()
     with caplog.at_level(logging.INFO):
@@ -529,103 +527,3 @@ def test_sse_formatting() -> None:
     assert done_event() == 'data: {"type":"done"}\n\n'
     assert json.loads(error_event("C", "m").removeprefix("data: ")) == {
         "type": "error", "code": "C", "message": "m"}
-
-
-# ── Ollama streaming implementation (httpx.MockTransport) ───────────
-
-
-def ollama_service(handler) -> OllamaLLMService:
-    svc = OllamaLLMService(base_url="http://ollama.test", model="qwen-test", timeout=5)
-    svc._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://ollama.test")
-    return svc
-
-
-def ndjson(*objs: dict[str, Any]) -> bytes:
-    return ("\n".join(json.dumps(o) for o in objs) + "\n").encode()
-
-
-@pytest.mark.asyncio
-async def test_ollama_generate_stream_yields_pieces_unchanged() -> None:
-    seen: dict[str, Any] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen["url"] = str(request.url)
-        seen["body"] = json.loads(request.content)
-        return httpx.Response(200, content=ndjson(
-            {"model": "m", "created_at": "t", "message": {"role": "assistant", "content": "The"}, "done": False},
-            {"model": "m", "message": {"role": "assistant", "content": " answer"}, "done": False},
-            {"model": "m", "message": {"role": "assistant", "content": ""}, "done": True,
-             "total_duration": 5},
-        ))
-
-    svc = ollama_service(handler)
-    pieces = [p async for p in svc.generate_stream("sys", "usr", json_mode=True)]
-    assert pieces == ["The", " answer"]
-    assert seen["url"].endswith("/api/chat")
-    assert seen["body"]["stream"] is True and seen["body"]["format"] == "json"
-    assert seen["body"]["model"] == "qwen-test"
-    assert seen["body"]["messages"][0] == {"role": "system", "content": "sys"}
-
-
-@pytest.mark.asyncio
-async def test_ollama_non_stream_payload_unchanged() -> None:
-    svc = OllamaLLMService(base_url="http://x", model="m", timeout=5)
-    payload_ = svc._build_payload("s", "u", json_mode=False, temperature=None, max_tokens=None)
-    assert payload_["stream"] is False and "format" not in payload_
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("exc,code", [
-    (httpx.ReadTimeout("slow"), ErrorCode.OLLAMA_TIMEOUT),
-    (httpx.ConnectError("refused"), ErrorCode.OLLAMA_UNAVAILABLE),
-    (httpx.RemoteProtocolError("dropped"), ErrorCode.OLLAMA_UNAVAILABLE),
-])
-async def test_ollama_generate_stream_transport_errors(exc: Exception, code: str) -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise exc
-
-    svc = ollama_service(handler)
-    with pytest.raises(AppError) as err:
-        _ = [p async for p in svc.generate_stream("s", "u")]
-    assert err.value.code == code
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("status,code", [
-    (404, ErrorCode.OLLAMA_MODEL_NOT_FOUND), (500, ErrorCode.OLLAMA_GENERATION_ERROR)])
-async def test_ollama_generate_stream_http_status(status: int, code: str) -> None:
-    svc = ollama_service(lambda r: httpx.Response(status, text="Traceback secret"))
-    with pytest.raises(AppError) as err:
-        _ = [p async for p in svc.generate_stream("s", "u")]
-    assert err.value.code == code and "secret" not in err.value.message
-
-
-@pytest.mark.asyncio
-async def test_ollama_generate_stream_bad_payloads() -> None:
-    cases = [
-        (b"not json\n", ErrorCode.OLLAMA_INVALID_RESPONSE),
-        (ndjson({"error": "model crashed"}), ErrorCode.OLLAMA_GENERATION_ERROR),
-        (ndjson({"message": {"content": ""}, "done": True}), ErrorCode.LLM_EMPTY_RESPONSE),
-        (ndjson({"message": {"content": 5}, "done": False}), ErrorCode.OLLAMA_INVALID_RESPONSE),
-    ]
-    for body, code in cases:
-        svc = ollama_service(lambda r, b=body: httpx.Response(200, content=b))
-        with pytest.raises(AppError) as err:
-            _ = [p async for p in svc.generate_stream("s", "u")]
-        assert err.value.code == code
-        assert "model crashed" not in err.value.message
-
-
-@pytest.mark.asyncio
-async def test_default_llm_interface_stream_not_supported() -> None:
-    from app.services.llm_service import LLMService
-
-    class Minimal(LLMService):
-        model_name = "x"  # type: ignore[assignment]
-
-        async def generate(self, *a, **k): return ""
-        async def generate_json(self, *a, **k): return {}
-        async def check_health(self): return {}
-
-    with pytest.raises(NotImplementedError):
-        _ = [p async for p in Minimal().generate_stream("s", "u")]

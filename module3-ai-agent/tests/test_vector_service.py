@@ -1,6 +1,6 @@
 """Phase 3 — Vector service tests.
 
-Integration-level tests that wire EmbeddingService (mocked) →
+Integration-level tests that wire GeminiEmbeddingService (mocked) →
 VectorService → ChromaRepository (real, in-memory).
 """
 
@@ -15,7 +15,7 @@ from chromadb.config import Settings as ChromaSettings
 
 from app.repositories.chroma_repository import ChromaRepository
 from app.schemas.document import Chunk, ChunkMetadata
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_service import GeminiEmbeddingService
 from app.services.vector_service import VectorService
 
 
@@ -47,9 +47,9 @@ def repo(chroma_client) -> ChromaRepository:
 
 @pytest.fixture()
 def mock_embedding_service():
-    """Return an EmbeddingService with mocked embed methods."""
-    service = EmbeddingService(
-        base_url="http://fake:11434",
+    """Return an GeminiEmbeddingService with mocked embed methods."""
+    service = GeminiEmbeddingService(
+        base_url="http://gemini.test/v1beta",
         model="test-embed",
         timeout=10,
     )
