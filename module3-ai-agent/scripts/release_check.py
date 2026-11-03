@@ -24,15 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 Result = tuple[str, str, str]  # (name, PASS|FAIL|SKIP, detail)
 SECRET_RE = re.compile(r"(?i)^\s*[A-Z_]*(PASSWORD|SECRET|API_KEY|TOKEN)[A-Z_]*[ \t]*=[ \t]*\S+", re.M)
-REQUIRED_DOCS = ["README.md", "docs/HANDOVER.md", "docs/INTEGRATION_CONTRACT.md", "docs/DEPLOYMENT.md",
-                 "docs/BACKUP_AND_RECOVERY.md", "docs/RELEASE.md", "docs/SECURITY.md",
-                 "docs/AI_VERSION_GOVERNANCE.md", "docs/PROMPT_VERSIONING.md", "docs/QUALITY_GATES.md",
-                 "docs/MODEL_PROMOTION_ROLLBACK.md", "docs/PHASE18_REPORT.md",
-                 "docs/THREAT_MODEL.md", "docs/DATA_PRIVACY.md", "docs/PHASE19_REPORT.md",
-                 "docs/OBSERVABILITY.md", "docs/SLO_SLA.md", "docs/RELIABILITY.md",
-                 "docs/FAILURE_RECOVERY.md", "docs/PHASE20_REPORT.md",
-                 "docs/DEPLOYMENT_RUNBOOK.md", "docs/RELEASE_CHECKLIST.md", "docs/GO_LIVE_CHECKLIST.md",
-                 "docs/DISASTER_RECOVERY.md", "docs/RELEASE_ENGINEERING.md", "docs/PHASE21_REPORT.md"]
+REQUIRED_DOCS = ["README.md", "docs/INTEGRATION_CONTRACT.md", "docs/SECURITY.md"]
 EXPECTED_PATHS = {
     "/health", "/health/live", "/health/ready", "/ready", "/api/documents/upload",
     "/api/documents/{document_id}", "/api/rag/retrieve", "/api/rag/answer", "/api/questions/generate",

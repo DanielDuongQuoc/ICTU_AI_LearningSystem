@@ -1,196 +1,210 @@
-# Module 3 - Integration Contract
+# Module 3 — Integration Contract
 
-Describes **Module 3's own API** (frozen). Contracts of Module 1 and Module 2 were not supplied,
-so nothing about their APIs is assumed here.
+Module 3's public HTTP API, as consumed by the C# backend (Module 1 / Module 2). The API is **frozen**:
+paths, request/response schemas, status codes and error-code strings do not change without a new
+contract version. The machine-readable source of truth is `GET /openapi.json` (Swagger UI at `/docs`);
+`tests/test_api_contract.py` pins it.
 
-Base URL: `http://<host>:8003`. Content type `application/json` unless stated.
+Base URL: `http://<host>:8003` locally, the Render URL in production. JSON (`application/json`) unless
+stated. There is no `/api/v1` prefix and no authentication (see [SECURITY.md](SECURITY.md)).
 
-## Module 1 -> Module 3 (document ingestion)
-> Integration contract with Module 1 requires confirmation.
+The AI provider behind the API is the **Google Gemini API** (generation + embeddings). Earlier versions
+used Ollama; a few response fields and error codes keep their historical `ollama`/`OLLAMA_*` names for
+backward compatibility (see [Legacy names](#legacy-names)).
 
-What Module 3 offers: `POST /api/documents/upload` (multipart, field `file`, `.pdf` or `.docx`, size limit
-`MAX_UPLOAD_SIZE_MB`) -> `{"document_id": "<uuid>", "filename", "pages", "chunks", "status"}`.
-Module 3 generates `document_id`; it does not accept a caller-supplied id. Whoever uploads must
-store the returned `document_id` (mapping to Module 1's own document identifier is *to be
-confirmed*). `GET /api/documents/{id}` checks existence; `DELETE /api/documents/{id}` removes the
-document and its chunks.
+## Endpoints
 
-## Module 2 -> Module 3 (questions and evaluation)
-> Module 2's formal contract requires confirmation. The following is what Module 3 accepts.
+| Method & path | Purpose | Success |
+|---|---|---|
+| `GET /health` | Dependency status, always HTTP 200 | `HealthCheckResponse` |
+| `GET /health/live` | Liveness (no dependency checked) | `{"status": "ok"}` |
+| `GET /health/ready`, `GET /ready` | Readiness: 200 when all dependencies ok, else 503 (same body as `/health`) | `HealthCheckResponse` |
+| `POST /api/documents/upload` | Multipart upload (field `file`, `.pdf` or `.docx`) → extract, chunk, embed, index | `DocumentUploadResponse` |
+| `GET /api/documents/{document_id}` | Document info (404 `DOCUMENT_NOT_FOUND` if absent) | `DocumentInfoResponse` |
+| `DELETE /api/documents/{document_id}` | Delete the document's chunks | `DocumentDeleteResponse` |
+| `POST /api/documents/{document_id}/search` | Semantic search inside one document `{query, top_k?}` | `SearchResponse` |
+| `POST /api/rag/retrieve` | Retrieve chunks + context, no LLM call | `RAGRetrievalResponse` |
+| `POST /api/rag/answer` | Grounded answer + sources | `RAGAnswerResponse` |
+| `POST /api/questions/generate` | Generate questions from a document | `QuestionGenerationResponse` |
+| `POST /api/questions/generate-matrix` | Exam matrix (several type/difficulty rows) | `MatrixGenerationResponse` |
+| `POST /api/evaluations/evaluate` | Score a student answer | `EvaluationResponse` |
+| `POST /api/evaluations/evaluate/stream` | Same evaluation as Server-Sent Events | `text/event-stream` |
+| `GET /metrics` | Prometheus text metrics (internal, not in OpenAPI) | text |
+| `GET /docs`, `GET /openapi.json` | API documentation | |
+
+Every response carries `X-Request-ID` (echoes a valid client value matching
+`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`, otherwise a generated UUID), plus `X-AI-Config-Version` and
+`X-AI-Config-Fingerprint` (identify the model/prompt configuration that produced the answer).
+
+## Documents
+
+`POST /api/documents/upload` (multipart, field `file`, max `MAX_UPLOAD_SIZE_MB`, default 30 MB):
+
+```json
+{"document_id": "<uuid4>", "filename": "lecture.pdf", "pages": 12, "chunks": 34, "status": "processed"}
+```
+
+- Module 3 generates `document_id`; it does not accept a caller-supplied id. The caller must store it.
+  Uploading the same file twice creates two independent documents.
+- `.docx`: OOXML content is verified (legacy `.doc` and macro files are rejected with 400 `INVALID_FILE`).
+  Word has no stored page numbers, so `page` is a logical page (explicit page break, or ~3000 chars).
+- Scanned/image-only files have no text → 422 `NO_EXTRACTABLE_TEXT`.
+- Limits: `MAX_PDF_PAGES`, `MAX_EXTRACTED_CHARS`, `MAX_CHUNKS_PER_DOCUMENT` → 413 `DOCUMENT_LIMIT_EXCEEDED`;
+  `PDF_PROCESSING_TIMEOUT_S` → 504; more than `MAX_CONCURRENT_UPLOADS` in progress → 503 `SERVICE_OVERLOADED`.
+- The document id never changes: upload response, document info, retrieval sources, question
+  `source_chunks` and evaluation sources all refer to the same id.
+
+## RAG
+
+`POST /api/rag/retrieve` and `POST /api/rag/answer`, body `{"document_id", "question", "top_k"?}`
+(`top_k` 1..`MAX_TOP_K`, default `TOP_K`). Sources carry `chunk_id`, `document_id`, `page`, `source`, `score`
+and come from the vector store, never from the model. When nothing relevant is found the response has
+`insufficient_context: true` and the LLM is not called. Retrieval is always filtered by `document_id`.
+
+## Questions
 
 `POST /api/questions/generate`
+
 ```json
 {"document_id": "<uuid>", "number_of_questions": 5, "difficulty": "medium", "question_type": "short_answer"}
 ```
+
 `number_of_questions` 1-20; `difficulty` easy|medium|hard; `question_type`
-short_answer|multiple_choice|true_false|essay. Response: `{"document_id", "questions": [{"question_id",
-"question", "expected_answer", "difficulty", "type", "source_chunks", "options"?, "correct_answer"?}]}`.
+short_answer|multiple_choice|true_false|essay. Response:
+`{"document_id", "questions": [{"question_id", "question", "expected_answer", "difficulty", "type", "source_chunks", "options"?, "correct_answer"?}]}`.
 
-`POST /api/evaluations/evaluate`
-```json
-{"document_id": "<uuid>", "question": "...", "student_answer": "...", "expected_answer": "...", "max_score": 10}
-```
+`POST /api/questions/generate-matrix`
 
-## Module 3 -> Module 2 (evaluation response)
-```json
-{"score": 8.0, "max_score": 10.0, "percentage": 80.0, "correct": true,
- "feedback": "...", "strengths": ["..."], "missing_points": ["..."], "errors": [],
- "sources": [{"page": 1, "chunk_id": "...", "score": 0.82}]}
-```
-`percentage`, `max_score` and `sources` are computed by the backend, never taken from the LLM.
-
-## Retrieval / answer (optional for consumers)
-`POST /api/rag/retrieve` and `/api/rag/answer`, body `{"document_id", "question", "top_k"?}`.
-Sources carry `chunk_id`, `document_id`, `page`, `source`, `score`.
-
-## Streaming
-`POST /api/evaluations/evaluate/stream` (same body as evaluate). Response `text/event-stream`
-with headers `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`.
-Each frame is `data: <json>\n\n`; `type` is one of:
-
-| type | meaning |
-|---|---|
-| `status` | progress message |
-| `token` | incremental model text (display only; not the final evaluation) |
-| `result` | final validated evaluation (same fields as above), at most once |
-| `error` | `{code, message}`; followed by `done` |
-| `done` | always the last event, exactly once |
-
-Request-field problems are reported as `error` events (HTTP 200), not HTTP 4xx. Consume with
-`curl -N`.
-
-## Errors
-`{"error": {"code": "...", "message": "...", "request_id": "..."}}`. Notable: 400
-`EMPTY_QUERY`/`EMPTY_STUDENT_ANSWER`/`EMPTY_EXPECTED_ANSWER`/`INVALID_TOP_K`; 404
-`DOCUMENT_NOT_FOUND`; 422 validation / `INSUFFICIENT_CONTEXT`; 502 LLM/embedding output problems;
-503 Ollama/Chroma unavailable; 504 `OLLAMA_TIMEOUT`. Send `X-Request-ID` to correlate logs.
-
----
-
-## Phase 13 additions
-
-### Detected system layout
-Only `module3-ai-agent/` exists in this repository. **Module 1 and Module 2 sources and APIs are
-not available**, so every Module 1 / Module 2 item below is `TBD - requires confirmation`.
-Verified status: **CONTRACT E2E only** (Module 3's frozen API driven by contract tests); FULL E2E
-is not run.
-
-Flow actually implemented by Module 3:
-`PDF upload -> extraction -> chunking -> embedding -> ChromaDB`, then
-`question generation` and `evaluation` (plain or SSE) retrieve context per `document_id`.
-
-### Module 1 -> Module 3
-| Item | Status |
-|---|---|
-| Transport / endpoint on Module 1 side | TBD - requires confirmation |
-| Module 3 entry point | `POST /api/documents/upload` (multipart `file`, `.pdf` or `.docx`) |
-| `document_id` | **Generated by Module 3** (UUID4) and returned; Module 3 does not accept an external id. If Module 1 must dictate the id, an adapter or a contract change is needed - TBD |
-| Metadata (title, course, ...) | Not accepted today; TBD |
-| Errors | Standard error body (`INVALID_PDF`, `FILE_TOO_LARGE`, `NO_EXTRACTABLE_TEXT`, ...) |
-
-`document_id` is never altered after upload: upload response, `GET /api/documents/{id}`, retrieval
-sources, generated questions and evaluation sources all refer to the same id (tested).
-
-### Module 2 -> Module 3
-Field names are exactly those in the Module 3 request schemas (`document_id`, `question`,
-`student_answer`, `expected_answer`, `max_score`). If Module 2 uses other names, map them in a
-Module 2-side adapter (Module 3's API is frozen). Module 2's own formal contract: TBD.
-Clients must not send `percentage`, `score` or `sources`: Module 3 ignores/recomputes them
-(`percentage = score / max_score * 100`, computed by the backend; `max_score` must be > 0;
-`0 <= score <= max_score`, otherwise the LLM result is rejected).
-Text is UTF-8 JSON; Vietnamese, CJK and emoji round-trip unchanged (tested).
-
-### Module 3 -> Module 2
-Evaluation response as above. Module 3 is the evaluation authority: Module 2 should display
-`score`/`percentage` as returned and not recompute them.
-
-### Request ID
-Send `X-Request-ID` (`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`); Module 3 echoes it in the response header and
-in every error body and log line. Invalid/missing -> a UUID is generated. Propagating the same id
-through Module 1 and Module 2 is a **recommendation** only (not required by Module 3).
-
-### CORS
-Disabled by default (server-to-server). To allow a browser frontend set
-`CORS_ALLOWED_ORIGINS=http://host1:port,http://host2:port` (comma-separated; no wildcard default,
-no credentials). `X-Request-ID` is exposed. No frontend URL is hardcoded.
-
-### Streaming consumers
-Module 2 (or its frontend) must read `text/event-stream`, split on blank lines and `json.loads`
-each `data: ` payload; act on `type` (`status|token|result|error|done`), treat `done` as the end,
-use `result` as the only authoritative evaluation. Module 3 never forwards raw Ollama output.
-Use HTTP client read timeouts >= `OLLAMA_TIMEOUT` (default 120 s) because the first token can be slow.
-
-### Timeout chain (current state, not changed)
-Client -> Module 3: set by the caller (TBD for Module 2). Module 3 -> Ollama: `OLLAMA_TIMEOUT`
-(read, default 120 s), `OLLAMA_CONNECT_TIMEOUT` (10 s), health probes `OLLAMA_HEALTH_TIMEOUT` (5 s),
-retries `OLLAMA_MAX_RETRIES` (HTTP 502/503/504 only). The caller's timeout should exceed
-`OLLAMA_TIMEOUT` (+ retry) plus retrieval time, otherwise it will give up before Module 3 does.
-
-### API versioning
-Module 3 paths are `/api/...` (no `/api/v1`). If Module 1/2 standardise on `/api/v1`, put the
-prefix in a gateway/adapter; Module 3 is not changed.
-
-### Idempotency
-`POST /api/documents/upload` is not idempotent: each upload creates a new `document_id` (re-upload of
-the same file creates a second, independent document - delete the old one if unwanted).
-Evaluation and retrieval are stateless (nothing stored). Question generation is stateless and
-de-duplicates within one response.
-
----
-
-## Alignment with the project requirements (additive; existing endpoints unchanged)
-
-Module 1 and Module 2 are **not** in this repository; everything stated about them is a recommendation, not a verified fact.
-
-### Word and PDF ingestion
-`POST /api/documents/upload` accepts `.pdf` and `.docx` through the same pipeline (validate -> extract -> clean -> chunk ->
-embed -> ChromaDB); the response shape is unchanged. Rules for `.docx`: ZIP/OOXML content is verified (not only the name or
-MIME), legacy `.doc` and macro-enabled files (`.docm`, anything containing `vbaProject.bin`) are rejected with 400
-`INVALID_FILE`, decompression size is bounded (zip-bomb guard), and the same page/character/chunk/timeout limits apply.
-Word files have no stored page numbers, so `page` is a **logical page**: an explicit page break (or Word's saved rendered page
-break) starts a new page and a page longer than ~3000 characters is split at paragraph boundaries. `source.page` is therefore
-stable and traceable but may differ from the page Word displays. Tables are extracted row by row (`cell | cell`); headers,
-footers, comments, text boxes and images are not extracted (scanned/image-only files have no text -> `NO_EXTRACTABLE_TEXT`).
-
-### Exam matrix: `POST /api/questions/generate-matrix`
 ```json
 {"document_id": "<uuid>", "subject": "Databases 101",
  "items": [{"question_type": "multiple_choice", "difficulty": "medium", "count": 5},
            {"question_type": "essay", "difficulty": "hard", "count": 2}]}
 ```
-`items`: 1-12 rows; `count` 1-20 per row; total <= `MAX_MATRIX_QUESTIONS` (50); `question_type` short_answer|multiple_choice|
-true_false|essay; `difficulty` easy|medium|hard. `subject` (optional, <= 200 chars) is echoed back for traceability and is
-**not sent to the model**. Response:
+
+`items` 1-12 rows, `count` 1-20 per row, total <= `MAX_MATRIX_QUESTIONS` (50). `subject` (optional, <= 200
+chars) is echoed back and not sent to the model. Response:
+`{"document_id", "subject", "requested_total", "generated_total", "complete", "items": [{"index", "question_type", "difficulty", "requested", "generated", "status", "error_code"?}], "questions": [{"matrix_item", ...question fields}]}`.
+Rows run sequentially (one LLM call each); nothing is padded to reach a count; each row reports
+`ok` / `partial` / `failed`. If the first row fails the whole call returns that error; later row failures
+are reported inside the 200 response.
+
+## Evaluation
+
+`POST /api/evaluations/evaluate`
+
 ```json
-{"document_id": "...", "subject": "Databases 101", "requested_total": 7, "generated_total": 7, "complete": true,
- "items": [{"index": 0, "question_type": "multiple_choice", "difficulty": "medium", "requested": 5, "generated": 5, "status": "ok"}],
- "questions": [{"matrix_item": 0, "question_id": "...", "question": "...", "expected_answer": "...", "difficulty": "medium",
-                "type": "multiple_choice", "source_chunks": ["..."], "options": ["..."], "correct_answer": "..."}]}
+{"document_id": "<uuid>", "question": "...", "student_answer": "...", "expected_answer": "...", "max_score": 10}
 ```
-For instructor review: nothing is stored by Module 3, nothing is padded to reach a count, rows are de-duplicated against each
-other, and each row reports `ok` / `partial` / `failed` (+ `error_code`). `complete` is true only if every row is exactly
-satisfied. If the first row fails the whole call returns that error (missing document, insufficient context, model down);
-later row failures are reported inside the 200 response. Rows run sequentially (one gated LLM call each), so a large matrix
-takes roughly rows x single-generation time and is bounded by `REQUEST_TIMEOUT_S`; Module 1 should keep the HTTP client
-timeout above that. Question generation (`/api/questions/generate`) and scoring (`/api/evaluations/*`) remain separate
-endpoints with separate schemas, prompts (versioned per task) and tests.
 
-### Scoring is not fraud detection
-Module 3 only scores an answer against the document and returns `score`, `feedback`, `strengths`, `missing_points`,
-`errors`, `sources`. It has **no** cheating/fraud/plagiarism output and does not infer misconduct from an unusual or low-quality
-answer (a test pins the response schema and asserts no such endpoint exists). Anti-cheat signals (focus loss, Alt+Tab,
-clipboard, timing) belong to Module 2, which reports them to Module 1. If Module 3 is ever asked to analyse answers for
-misconduct, a separate data contract (inputs, labels, evidence, human-review requirement) must be agreed first.
+Response:
 
-### SSE through a C# API / proxy (recommendations; the C# code is not in this repository, NOT VERIFIED)
-- Do not buffer: in ASP.NET Core read upstream with `HttpCompletionOption.ResponseHeadersRead`, copy the stream to the response
-  with a flush after every chunk (or `await foreach` over lines), and pass the request `CancellationToken` both ways so a
-  closed client aborts the Ollama work.
-- Response headers to keep: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`.
-  Disable response compression for this route; if nginx/YARP/IIS sits in front, disable proxy buffering for it
-  (`proxy_buffering off`) and set read timeouts above `OLLAMA_TIMEOUT`.
-- Keep the event contract unchanged (`status|token|result|error|done`); use `result` as the only authoritative evaluation.
-- Module 3 sends no keep-alive comments: long silence is possible while the first token is generated, so proxy idle timeouts
-  must exceed `OLLAMA_TIMEOUT`.
-Module 3's side (headers, event order, one terminal `done`) is covered by tests; the proxy behaviour needs a test in Module 2's
-solution.
+```json
+{"score": 8.0, "max_score": 10.0, "percentage": 80.0, "correct": true,
+ "feedback": "...", "strengths": ["..."], "missing_points": ["..."], "errors": [],
+ "sources": [{"page": 1, "chunk_id": "...", "score": 0.82}]}
+```
+
+`percentage`, `max_score` and `sources` are computed by the backend; a model score outside
+`0..max_score` is rejected. Module 3 only scores answers — it has no cheating/fraud output.
+
+### Streaming
+
+`POST /api/evaluations/evaluate/stream` (same body). `text/event-stream` with `Cache-Control: no-cache`,
+`Connection: keep-alive`, `X-Accel-Buffering: no`. Each frame is `data: <json>\n\n` with `type`:
+
+| type | meaning |
+|---|---|
+| `status` | progress message |
+| `token` | incremental model text (display only) |
+| `result` | final validated evaluation (same fields as above), at most once |
+| `error` | `{code, message}`; followed by `done` |
+| `done` | always the last event, exactly once |
+
+Request-field problems are reported as `error` events with HTTP 200. Through a C#/proxy layer: read with
+`HttpCompletionOption.ResponseHeadersRead`, flush per chunk, disable response compression/proxy buffering
+for this route, and keep read timeouts above `LLM_TIMEOUT` (120 s) — no keep-alive comments are sent.
+
+## Health
+
+```json
+{"status": "ok", "ollama": true, "chromadb": true, "version": "0.14.0",
+ "services": {"api": "ok", "chroma": "ok", "ollama": "ok", "model": "ok", "storage": "ok", "embedding_index": "ok"}}
+```
+
+`status` is `ok` or `degraded`. `ollama` / `services.ollama` = the Gemini API is reachable with the
+configured key; `services.model` = `GEMINI_MODEL` is available. A missing `GEMINI_API_KEY` shows as
+`degraded` (the process still runs).
+
+## Errors
+
+Every error body is `{"error": {"code": "...", "message": "...", "request_id": "..."}}` (never a stack trace).
+Validation failures are 422 `VALIDATION_ERROR`; rate limit 429 `RATE_LIMITED` with `Retry-After`.
+
+| HTTP | Error code | Situation |
+|---:|---|---|
+| 400 | `EMBEDDING_EMPTY_TEXT` | Text to embed is empty |
+| 400 | `EMPTY_DOCUMENT_ID` | document_id is empty |
+| 400 | `EMPTY_EXPECTED_ANSWER` | expected_answer is empty |
+| 400 | `EMPTY_FILE` | Uploaded file is empty |
+| 400 | `EMPTY_QUERY` | RAG question is empty |
+| 400 | `EMPTY_QUESTION` | Evaluation question is empty |
+| 400 | `EMPTY_STUDENT_ANSWER` | student_answer is empty |
+| 400 | `HTTP_ERROR` | Other HTTP error raised by the framework |
+| 400 | `INPUT_TOO_LONG` | question > MAX_QUESTION_CHARS or answer > MAX_ANSWER_CHARS |
+| 400 | `INVALID_DIFFICULTY` | difficulty not easy/medium/hard |
+| 400 | `INVALID_DOCUMENT_ID` | document_id is not a valid UUID (question/evaluation endpoints) |
+| 400 | `INVALID_FILE` | Not an accepted PDF/DOCX upload (extension / content type / signature) |
+| 400 | `INVALID_NUMBER_OF_QUESTIONS` | number_of_questions outside 1-20 |
+| 400 | `INVALID_PDF` | File cannot be opened (corrupted) |
+| 400 | `INVALID_QUESTION_TYPE` | question_type not supported |
+| 400 | `INVALID_SCORE` | max_score invalid (502 when the model produced the bad score) |
+| 400 | `INVALID_TOP_K` | top_k < 1 or > MAX_TOP_K |
+| 404 | `DOCUMENT_NOT_FOUND` | No chunks stored for this document_id |
+| 404 | `FILE_NOT_FOUND` | Internal file reference missing |
+| 404 | `NOT_FOUND` | Unknown route |
+| 405 | `METHOD_NOT_ALLOWED` | HTTP method not allowed on this route |
+| 413 | `FILE_TOO_LARGE` | Upload exceeds MAX_UPLOAD_SIZE_MB |
+| 413 | `DOCUMENT_LIMIT_EXCEEDED` | Page / extracted-text / chunk limit exceeded |
+| 413 | `REQUEST_TOO_LARGE` | JSON body exceeds MAX_REQUEST_BODY_BYTES |
+| 422 | `INSUFFICIENT_CONTEXT` | Retrieved context is not enough; the LLM is NOT called |
+| 422 | `NO_EXTRACTABLE_TEXT` | No extractable text (e.g. scanned images, no OCR) |
+| 422 | `VALIDATION_ERROR` | Request body/params fail schema validation |
+| 429 | `RATE_LIMITED` | Per-client rate limit exceeded (see Retry-After) |
+| 500 | `APPLICATION_CONFIGURATION_ERROR` | Invalid configuration (startup failure; not an HTTP response) |
+| 500 | `EVALUATION_ERROR` | Unexpected failure during evaluation |
+| 500 | `INDEXING_ERROR` | Failed to store chunks (or embedding-model mismatch, re-index needed) |
+| 500 | `INTERNAL_SERVER_ERROR` | Unhandled internal error (details only in server logs) |
+| 500 | `PROCESSING_ERROR` | Unexpected failure while processing the file |
+| 500 | `QUESTION_GENERATION_ERROR` | Unexpected failure in question generation |
+| 500 | `RAG_RETRIEVAL_ERROR` | Unexpected failure during retrieval |
+| 500 | `SOURCE_INTEGRITY_ERROR` | Sources do not belong to the requested document (blocked) |
+| 502 | `EMBEDDING_ERROR` | Embedding step failed during retrieval |
+| 502 | `EMBEDDING_INVALID_RESPONSE` | Gemini returned a malformed embedding or an unexpected HTTP status |
+| 502 | `EVALUATION_INVALID_RESPONSE` | Model evaluation JSON invalid / inconsistent |
+| 502 | `LLM_EMPTY_RESPONSE` | Model returned empty output |
+| 502 | `LLM_INVALID_JSON` | Model output is not valid JSON (after one retry) |
+| 502 | `LLM_OUTPUT_REJECTED` | Model output rejected (too large / leaked prompt) |
+| 502 | `OLLAMA_GENERATION_ERROR` | Gemini returned an error status (incl. persistent 429 quota errors) |
+| 502 | `OLLAMA_INVALID_RESPONSE` | Gemini returned a malformed response |
+| 502 | `QUESTION_GENERATION_INVALID_RESPONSE` | Model produced no valid questions |
+| 503 | `CHROMA_ERROR` | Vector store operation failed / unavailable |
+| 503 | `EMBEDDING_MODEL_NOT_FOUND` | GEMINI_EMBEDDING_MODEL does not exist |
+| 503 | `EMBEDDING_SERVICE_UNAVAILABLE` | Gemini embedding endpoint unreachable or API key missing |
+| 503 | `OLLAMA_MODEL_NOT_FOUND` | GEMINI_MODEL does not exist |
+| 503 | `OLLAMA_UNAVAILABLE` | Gemini API unreachable or GEMINI_API_KEY not configured |
+| 503 | `SERVICE_OVERLOADED` | No LLM/embedding/upload slot free in time (retry shortly) |
+| 504 | `EMBEDDING_TIMEOUT` | Embedding request timed out |
+| 504 | `OLLAMA_TIMEOUT` | Gemini did not answer within LLM_TIMEOUT (or the request budget ran out) |
+| 504 | `PDF_PROCESSING_TIMEOUT` | Extraction exceeded PDF_PROCESSING_TIMEOUT_S |
+
+On the streaming endpoint these errors arrive as an SSE `error` event followed by `done` (HTTP 200).
+
+## Legacy names
+
+Kept unchanged so existing clients keep working; they now refer to the Gemini provider:
+
+- `/health` fields `ollama` and `services.ollama` (provider reachable) and `services.model`.
+- Error codes `OLLAMA_UNAVAILABLE`, `OLLAMA_TIMEOUT`, `OLLAMA_MODEL_NOT_FOUND`, `OLLAMA_INVALID_RESPONSE`,
+  `OLLAMA_GENERATION_ERROR`.
+
+The disabled-by-default admin endpoints `/api/ai-versions*` were removed (never part of the client contract).

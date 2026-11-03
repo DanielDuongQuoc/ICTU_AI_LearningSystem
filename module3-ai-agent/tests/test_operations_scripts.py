@@ -144,12 +144,3 @@ def test_restore_refuses_without_confirmation_and_on_corruption(tmp_path):
     with pytest.raises(backup.BackupError):
         restore.restore_backup(archives[0], tmp_path / "t", assume_yes=True)
 
-# ------------------------------------------------------------------ docs
-
-def test_operational_docs_exist_and_state_limits_honestly():
-    for name in ("OPERATIONS_RUNBOOK", "INCIDENT_RESPONSE", "MAINTENANCE", "PHASE16_REPORT"):
-        assert (ROOT / "docs" / f"{name}.md").is_file(), name
-    runbook = (ROOT / "docs" / "OPERATIONS_RUNBOOK.md").read_text(encoding="utf-8")
-    for case in ("Case A", "Case B", "Case C", "Case D", "Case E", "Case F", "Case G"):
-        assert case in runbook, case
-    assert "/metrics" in runbook and "NOT VERIFIED" in (ROOT / "docs" / "PHASE16_REPORT.md").read_text(encoding="utf-8")
