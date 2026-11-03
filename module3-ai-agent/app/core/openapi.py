@@ -13,8 +13,6 @@ from app.schemas.common import ErrorResponse
 ERROR_DESCRIPTIONS: dict[int, str] = {
     400: "Invalid input (domain validation code such as EMPTY_QUERY, INVALID_TOP_K, INVALID_PDF).",
     404: "Document not found (DOCUMENT_NOT_FOUND).",
-    401: "Admin token missing or wrong (ADMIN_AUTH_REQUIRED).",
-    409: "Version-state conflict or refusal (AI_VERSION_INVALID_TRANSITION, AI_VERSION_GATE_BLOCKED, AI_VERSION_CONFLICT, ...).",
     413: "File or document too large (FILE_TOO_LARGE, DOCUMENT_LIMIT_EXCEEDED: pages/text/chunks).",
     429: "Rate limit exceeded (RATE_LIMITED); see the Retry-After header.",
     422: "Invalid request data (VALIDATION_ERROR) or not enough document context (INSUFFICIENT_CONTEXT).",

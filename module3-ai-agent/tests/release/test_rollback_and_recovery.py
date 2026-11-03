@@ -1,72 +1,13 @@
-"""Phase 21 - AI version rollback must change what the RUNTIME really uses (not just a stored label),
-and an Ollama restart must degrade safely and recover (reuses Phase 18 fixtures and the Phase 14 smoke flow)."""
+"""Phase 21 - an LLM provider restart must degrade safely and recover (reuses the Phase 14 smoke flow)."""
 
 from __future__ import annotations
 
-import asyncio
-import json
-
-import httpx
 import pytest
 
-from app.core import runtime_config as rc
 from app.core.config import get_settings
 from app.core.exceptions import AppError, ErrorCode
-from app.services.llm_service import OllamaLLMService
 from scripts.smoke_test import run_smoke
 from tests.fakes import Stack
-from tests.test_phase18_governance import candidate_config, create_version, make_active, put_evidence, svc  # noqa: F401
-
-
-def _capturing_llm(seen: list[str]) -> OllamaLLMService:
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(json.loads(request.content)["model"])
-        return httpx.Response(200, json={"message": {"content": "ok"}, "done": True})
-
-    llm = OllamaLLMService(base_url="http://ollama.test")           # model follows the ACTIVE version per call
-    llm._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://ollama.test")
-    return llm
-
-
-def test_rollback_changes_the_model_actually_sent_to_ollama(svc):  # noqa: F811
-    async def run():
-        seen: list[str] = []
-        llm = _capturing_llm(seen)
-        v_a = await make_active(svc, candidate_config(), "version A")             # AI version A active
-        await llm.generate("s", "u")
-        cfg_b = candidate_config(model="cand-model:2b", top_k=3)
-        v_b = create_version(svc, cfg_b, "version B")
-        put_evidence(svc, v_b, cfg_b)
-        svc.evaluate(v_b, None, "t", "r")
-        svc.approve(v_b, "ok", "t", "r")
-        await svc.promote(v_b, "upgrade", "t", "r")                                # B promoted
-        await llm.generate("s", "u")
-        await svc.rollback(v_a, "B has latency/quality issues", "t", "r")          # back to A
-        await llm.generate("s", "u")
-        assert seen == ["cand-model:1b", "cand-model:2b", "cand-model:1b"], "runtime did not follow the rollback"
-        assert rc.current().version_id == v_a
-        await llm.close()
-
-    asyncio.run(run())
-
-
-def test_rollback_keeps_manifests_audit_and_does_not_touch_vectors(svc):  # noqa: F811
-    async def run():
-        stack = Stack()
-        before = stack.repo.count()
-        v_a = await make_active(svc, candidate_config(), "version A")
-        cfg_b = candidate_config(model="cand-model:2b", top_k=3)
-        v_b = create_version(svc, cfg_b, "version B")
-        put_evidence(svc, v_b, cfg_b)
-        svc.evaluate(v_b, None, "t", "r")
-        svc.approve(v_b, "ok", "t", "r")
-        await svc.promote(v_b, "up", "t", "r")
-        await svc.rollback(v_a, "rollback drill", "t", "r")
-        assert svc.repo.read_manifest(v_a) is not None and svc.repo.read_manifest(v_b) is not None
-        assert [e.event for e in svc.audit() if e.event in ("promote", "rollback")].count("rollback") == 1
-        assert stack.repo.count() == before                      # AI-version rollback never touches ChromaDB
-
-    asyncio.run(run())
 
 
 # --------------------------------------------------------------- Ollama restart through the smoke flow

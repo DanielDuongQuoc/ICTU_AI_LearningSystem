@@ -72,10 +72,8 @@ services:
       - APP_PORT=8003
       - OLLAMA_BASE_URL=http://ollama:11434
       - CHROMA_PERSIST_DIRECTORY=/app/data/chroma
-      - AI_VERSIONS_DIR=/app/data/ai_versions
     volumes:
       - chroma_data:/app/data/chroma
-      - ai_versions_data:/app/data/ai_versions
       - uploads_data:/app/uploads
     depends_on:
       ollama:
@@ -91,4 +89,3 @@ volumes:
   ollama_data:
   chroma_data:
   uploads_data:
-  ai_versions_data:

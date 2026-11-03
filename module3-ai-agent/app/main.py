@@ -19,7 +19,6 @@ from app.api.documents import router as documents_router
 from app.api.questions import router as questions_router
 from app.api.evaluations import router as evaluations_router
 from app.api.rag import router as rag_router
-from app.api.ai_versions import router as ai_versions_router
 
 
 async def _close_shared_clients(logger: logging.Logger) -> None:
@@ -54,13 +53,6 @@ async def lifespan(app: FastAPI):
         init_chroma()
     except Exception as exc:
         logger.error("ChromaDB initialisation failed (starting degraded): %s", exc)
-
-    try:
-        from app.services.ai_version_service import init_ai_versions
-
-        init_ai_versions()  # applies the persisted ACTIVE approved version (never raises)
-    except Exception as exc:
-        logger.error("AI version governance init failed (using environment configuration): %s", exc)
 
     from app.services.ollama_checker import check_ollama_health
 
@@ -123,7 +115,6 @@ def create_app() -> FastAPI:
     app.include_router(rag_router)
     app.include_router(questions_router)
     app.include_router(evaluations_router)
-    app.include_router(ai_versions_router)
     register_exception_handlers(app)
     install_openapi(app)
     return app

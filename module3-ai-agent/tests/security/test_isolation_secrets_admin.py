@@ -1,4 +1,4 @@
-"""Document isolation, secret/log privacy, repository hygiene and admin-plane security (Phase 19)."""
+"""Document isolation, secret/log privacy and repository hygiene (Phase 19)."""
 
 from __future__ import annotations
 
@@ -6,16 +6,11 @@ import logging
 import re
 from pathlib import Path
 
-import pytest
 
 from app.core.config import get_settings
-from app.core.rate_limit import limiter
-from app.services.ai_version_service import reset_ai_version_service
 from tests.security.conftest import TEXT_A, TEXT_B, assert_safe_error, eval_body, upload_text
 
 ROOT = Path(__file__).resolve().parents[2]
-TOKEN = "security-test-admin-token-VALUE-123"
-H = {"X-Admin-Token": TOKEN}
 
 
 # ---------------------------------------------------------------- isolation / deletion
@@ -64,19 +59,8 @@ async def test_logs_never_contain_content_secrets_or_prompts(client, stack, capl
         assert canary not in caplog.text, f"{canary} was logged"
 
 
-async def test_admin_token_never_logged_even_on_failure(client, caplog, monkeypatch):
-    monkeypatch.setattr(get_settings(), "admin_api_token", TOKEN)
-    with caplog.at_level(logging.DEBUG):
-        await client.get("/api/ai-versions", headers={"X-Admin-Token": "WRONG-TOKEN-CANARY"})
-        await client.get("/api/ai-versions", headers=H)
-    assert "WRONG-TOKEN-CANARY" not in caplog.text and TOKEN not in caplog.text
-    assert "admin authentication failed" in caplog.text
-
-
 def test_settings_repr_does_not_expose_token(monkeypatch):
-    monkeypatch.setattr(get_settings(), "admin_api_token", TOKEN)
     monkeypatch.setattr(get_settings(), "gemini_api_key", "AQ.secret-gemini-key-canary-1234567890")
-    assert TOKEN not in repr(get_settings()) and TOKEN not in str(get_settings())
     assert "AQ.secret-gemini-key-canary-1234567890" not in repr(get_settings())
     assert "AQ.secret-gemini-key-canary-1234567890" not in str(get_settings())
 
@@ -123,7 +107,7 @@ def test_no_hardcoded_secrets_in_tracked_sources():
 
 def test_env_example_has_no_secret_values():
     text = (ROOT / ".env.example").read_text(encoding="utf-8")
-    for secret_key in ("ADMIN_API_TOKEN", "GEMINI_API_KEY"):
+    for secret_key in ("GEMINI_API_KEY",):
         m = re.search(rf"(?m)^{secret_key}=(.*)$", text)
         assert m is not None and m.group(1).strip() == "", secret_key
 
@@ -132,7 +116,6 @@ def test_gitignore_and_dockerignore_protect_secrets_and_data():
     gi = (ROOT / ".gitignore").read_text(encoding="utf-8")
     di = (ROOT / ".dockerignore").read_text(encoding="utf-8")
     assert re.search(r"(?m)^\.env\s*$", gi) and re.search(r"(?m)^\.env\s*$", di)
-    assert "ai_versions" in gi, ".gitignore must exclude runtime AI-version data"
     assert "data/" in di and "uploads/" in di
 
 
@@ -140,7 +123,6 @@ def test_dockerfile_runs_non_root_without_env_file():
     df = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert re.search(r"(?m)^USER app\s*$", df)
     assert not re.search(r"(?mi)^(COPY|ADD)\b.*\.env\b", df)
-    assert "/app/data/ai_versions" in df
 
 
 def test_compose_hardening():
@@ -148,7 +130,6 @@ def test_compose_hardening():
     assert "no-new-privileges:true" in dc
     assert re.search(r"cap_drop:\s*\n\s*- ALL", dc)
     assert "127.0.0.1:11434:11434" in dc              # model server not exposed on all interfaces
-    assert "ai_versions_data" in dc
 
 
 def test_default_config_is_safe():
@@ -156,56 +137,3 @@ def test_default_config_is_safe():
     assert s.app_env != "production" or not s.cors_origins or "*" not in s.cors_origins
     assert s.cors_origins == [] or "*" not in s.cors_origins
     assert s.rate_limit_per_minute > 0 and s.max_request_body_bytes > 0 and s.max_pdf_pages > 0
-
-
-# ---------------------------------------------------------------- admin plane (Phase 18) security
-@pytest.fixture()
-def admin(tmp_path, monkeypatch):
-    s = get_settings()
-    monkeypatch.setattr(s, "ai_versions_dir", str(tmp_path / "ai_versions"))
-    monkeypatch.setattr(s, "admin_api_token", TOKEN)
-    reset_ai_version_service()
-    yield s
-    reset_ai_version_service()
-
-
-async def test_admin_plane_closed_without_valid_token(client, admin):
-    for method, url in (("GET", "/api/ai-versions"), ("GET", "/api/ai-versions/active"),
-                        ("POST", "/api/ai-versions"), ("POST", "/api/ai-versions/rollback"),
-                        ("POST", "/api/ai-versions/x/promote"), ("POST", "/api/ai-versions/x/approve")):
-        for headers in ({}, {"X-Admin-Token": ""}, {"X-Admin-Token": TOKEN[:-1]}, {"X-Admin-Token": TOKEN + "x"}):
-            limiter.reset()
-            resp = await client.request(method, url, headers=headers, json={})
-            assert resp.status_code == 401, (method, url, headers)
-
-
-async def test_admin_plane_disabled_when_no_token_configured(client, admin, monkeypatch):
-    monkeypatch.setattr(admin, "admin_api_token", "")
-    resp = await client.get("/api/ai-versions", headers={"X-Admin-Token": ""})
-    assert resp.status_code == 503 and resp.json()["error"]["code"] == "ADMIN_DISABLED"
-
-
-async def test_brute_force_is_locked_out_even_for_the_right_token(client, admin):
-    for _ in range(10):
-        assert (await client.get("/api/ai-versions", headers={"X-Admin-Token": "guess"})).status_code == 401
-    locked = await client.get("/api/ai-versions", headers=H)
-    assert locked.status_code == 429 and locked.headers.get("retry-after")
-    assert locked.json()["error"]["code"] == "RATE_LIMITED"
-
-
-async def test_client_cannot_inject_status_or_promote_unvalidated_version(client, admin):
-    r = await client.post("/api/ai-versions", headers=H, json={"description": "x", "status": "active", "config": {}})
-    assert r.status_code == 422
-    for path in ("promote", "approve"):
-        r = await client.post(f"/api/ai-versions/does-not-exist/{path}", headers=H, json={"reason": "go"})
-        assert r.status_code in (404, 409, 422)
-    r = await client.post("/api/ai-versions/rollback", headers=H, json={"reason": "go", "to_version_id": "../../etc"})
-    assert r.status_code in (404, 409, 422)
-
-
-async def test_version_id_traversal_is_rejected(client, admin):
-    from urllib.parse import quote
-    for evil in ("../../etc/passwd", "..\\..\\x", "/etc/passwd", "C:\\Windows"):
-        r = await client.get(f"/api/ai-versions/{quote(evil, safe='')}", headers=H)
-        assert r.status_code in (404, 422), (evil, r.status_code)
-    assert not (Path(get_settings().ai_versions_dir).parent / "etc").exists()

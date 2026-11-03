@@ -23,7 +23,6 @@ from scripts import eval_common as ec
 from scripts import evaluate_answer_evaluation as ae
 from scripts import evaluate_question_generation as qg
 from scripts import evaluate_rag
-from scripts import quality_gate as gate
 from scripts.rag_quality import evaluate_cases
 
 CORPUS = ec.load_corpus()
@@ -469,100 +468,3 @@ async def test_answer_quality_code_path_runs_with_scripted_llm(stack):
     quality = next(v for k, v in report["sections"].items() if k.startswith("Answer quality"))
     assert 0.0 <= quality["faithfulness_proxy"] <= 1.0
     assert report["invariants"]["source_integrity_violations"] == 0
-
-
-# -- quality gate -------------------------------------------------------------------------------------------
-
-
-def _report(suite: str, mode: str = "offline", cases: int = 40, metrics: dict | None = None,
-            invariants: dict | None = None, **meta: Any) -> dict[str, Any]:
-    base_meta = {"evaluation_run_id": f"{suite}-20260101T000000Z-aaaaaa", "timestamp": "2026-01-01T00:00:00+00:00",
-                 "mode": mode, "dataset_version": "1.0.0", "model_name": "m", "embedding_model": "e", "top_k": 5,
-                 "similarity_threshold": 0.3, "prompt_version": {"x": "v1"}}
-    base_meta.update(meta)
-    defaults = {"rag": {"hit@5": 0.9, "mrr": 0.8, "insufficient_context_detection_rate": 0.8,
-                        "incorrect_abstention_rate": 0.1},
-                "qgen": {"answerability_rate": 0.9, "groundedness_rate": 0.9, "duplication_rate": 0.0},
-                "answer_eval": {"within_band_rate": 0.8, "correct_label_accuracy": 0.85,
-                                "over_scoring_rate_wrong_answers": 0.0, "under_scoring_rate_paraphrases": 0.0}}
-    return {"metadata": base_meta, "cases": cases, "metrics_flat": metrics or defaults[suite],
-            "invariants": invariants or {"source_integrity_violations": 0, "document_isolation_violations": 0}}
-
-
-def _put(directory: Path, report: dict[str, Any], suffix: str = "") -> None:
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / f"{report['metadata']['evaluation_run_id']}{suffix}.json").write_text(json.dumps(report))
-
-
-def _all(directory: Path, **kw: Any) -> None:
-    for s in gate.SUITES:
-        _put(directory, _report(s, **kw))
-
-
-def test_gate_never_passes_without_reports(tmp_path):
-    r = gate.run_gate(tmp_path / "none", None, 0.05, False)
-    assert r["verdict"] == "INSUFFICIENT EVIDENCE" and r["exit_code"] == gate.EXIT_INSUFFICIENT
-    r = gate.run_gate(tmp_path / "none", None, 0.05, True)  # even in CI mode: evaluator did not run
-    assert r["exit_code"] == gate.EXIT_INSUFFICIENT
-
-
-def test_gate_offline_reports_are_not_a_quality_pass(tmp_path):
-    _all(tmp_path / "r", mode="offline")
-    strict = gate.run_gate(tmp_path / "r", None, 0.05, False)
-    assert strict["exit_code"] == gate.EXIT_INSUFFICIENT
-    ci = gate.run_gate(tmp_path / "r", None, 0.05, True)
-    assert ci["exit_code"] == gate.EXIT_PASS
-    assert "QUALITY: INSUFFICIENT EVIDENCE" in ci["verdict"] and not ci["verdict"].startswith("PASS")
-
-
-def test_gate_source_and_isolation_violations_are_severe(tmp_path):
-    for name in ("source_integrity_violations", "document_isolation_violations"):
-        d = tmp_path / name
-        _put(d, _report("rag", invariants={name: 1}))
-        r = gate.run_gate(d, None, 0.05, True)
-        assert r["verdict"].startswith("SEVERE") and r["exit_code"] == gate.EXIT_SEVERE
-
-
-def test_gate_data_integrity_and_infrastructure_failures(tmp_path, monkeypatch):
-    monkeypatch.setattr(gate, "validate_datasets", lambda: ["rag_eval.jsonl: broken"])
-    assert gate.run_gate(tmp_path, None, 0.05, True)["exit_code"] == gate.EXIT_DATA
-    monkeypatch.undo()
-    (tmp_path / "bad.json").write_text("{nope")
-    r = gate.run_gate(tmp_path, None, 0.05, True)
-    assert r["exit_code"] == gate.EXIT_INFRA
-
-
-def test_gate_regression_baseline_and_comparability(tmp_path):
-    cur, base = tmp_path / "cur", tmp_path / "base"
-    _all(base, mode="ollama")
-    _all(cur, mode="ollama")
-    ok = gate.run_gate(cur, base, 0.05, False)
-    assert ok["verdict"] == "PASS" and ok["exit_code"] == gate.EXIT_PASS
-    # no baseline -> never PASS
-    assert gate.run_gate(cur, tmp_path / "nobase", 0.05, False)["exit_code"] == gate.EXIT_INSUFFICIENT
-    # regression
-    worse = tmp_path / "worse"
-    for s in gate.SUITES:
-        rep = _report(s, mode="ollama")
-        if s == "rag":
-            rep["metrics_flat"] = dict(rep["metrics_flat"], mrr=0.5)
-        _put(worse, rep)
-    r = gate.run_gate(worse, base, 0.05, False)
-    assert r["exit_code"] == gate.EXIT_REGRESSION and any("rag.mrr" in x for x in r["reasons"])
-    # different model -> not compared (and therefore never PASS)
-    other = tmp_path / "other"
-    _all(other, mode="ollama", model_name="different-model")
-    r = gate.run_gate(other, base, 0.05, False)
-    assert r["exit_code"] == gate.EXIT_INSUFFICIENT and any("differs from baseline" in x for x in r["reasons"])
-    # tiny dataset -> insufficient evidence
-    tiny = tmp_path / "tiny"
-    for s in gate.SUITES:
-        _put(tiny, _report(s, mode="ollama", cases=5))
-    assert gate.run_gate(tiny, base, 0.05, False)["exit_code"] == gate.EXIT_INSUFFICIENT
-
-
-def test_gate_cli_prints_a_single_verdict(tmp_path, capsys):
-    _all(tmp_path / "r")
-    code = gate.main(["--reports", str(tmp_path / "r"), "--baseline-dir", str(tmp_path / "b"), "--deterministic-only"])
-    out = capsys.readouterr().out
-    assert code == 0 and out.count("QUALITY GATE:") == 1

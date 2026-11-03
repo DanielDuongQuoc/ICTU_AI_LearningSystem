@@ -69,9 +69,7 @@ class RequestContextMiddleware:
         request_id = resolve_request_id(client_value)
         scope.setdefault("state", {})["request_id"] = request_id  # -> request.state.request_id
         token = request_id_var.set(request_id)
-        # Phase 18: the AI configuration is pinned per request (a promotion mid-request only affects
-        # later requests) and reported in response headers for traceability.
-        config_token = runtime_config.pin_current()
+        # The AI configuration (models, prompt versions, RAG parameters) is reported in response headers.
         ai_cfg = runtime_config.current()
         # Phase 20: time budget for LLM/embedding calls + per-request stage timings (slow-request logs).
         deadline_token = deadline_var.set(time.monotonic() + get_settings().request_timeout_s)
@@ -167,5 +165,4 @@ class RequestContextMiddleware:
         finally:
             deadline_var.reset(deadline_token)
             stage_times_var.reset(stages_token)
-            runtime_config.unpin(config_token)
             request_id_var.reset(token)

@@ -27,8 +27,6 @@ ENV/
 # Data / uploads (folders are kept via .gitkeep)
 data/chroma/*
 !data/chroma/.gitkeep
-data/ai_versions/*
-!data/ai_versions/.gitkeep
 uploads/*
 !uploads/.gitkeep
 

@@ -10,7 +10,6 @@ import asyncio
 import json
 import random
 import re
-import uuid
 
 import httpx
 import pytest
@@ -20,7 +19,7 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import AppError, ErrorCode
 from app.schemas.document import ExtractedPage
 from app.services import chunk_service
-from app.services.chunk_service import _Unit, _join_units, _metadata_for_pages, _overlap_units, _units_from_page
+from app.services.chunk_service import _join_units, _metadata_for_pages, _overlap_units, _units_from_page
 from app.services.embedding_service import EmbeddingService
 from scripts import benchmark_scale, perf_regression
 from tests.fakes import Stack, sample_pdf_bytes

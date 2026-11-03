@@ -2,17 +2,14 @@
 
 The prompt TEXT still lives in :mod:`app.core.prompts` (single source, nothing is duplicated); this
 module wraps it with a ``(task, version)`` key, a SHA-256 content fingerprint and a build entry point
-so services can select the prompt version of the active AI configuration.
+so services build prompts through one place and the configuration fingerprint covers prompt text.
 
 Rules enforced here
 * A ``(task, version)`` pair is immutable: registering the same pair with different text is an error,
   and :func:`verify_lock` compares the shipped v1 prompts with the committed fingerprints so a prompt
   edited WITHOUT bumping its version is detected (tests + startup log).
-* New versions are *experimental* until an approved AI version selects them (the active one is simply
-  the version named by the effective configuration; adding a version never changes behaviour).
 * :func:`lint_prompt_texts` is a cheap first filter (injection hierarchy statement, no external
-  knowledge, no request for backend-owned fields).  It is NOT a safety proof: the real gate is the
-  Phase 17 behavioural evaluation.
+  knowledge, no request for backend-owned fields).  It is NOT a safety proof; the behavioural tests are.
 """
 
 from __future__ import annotations
@@ -113,21 +110,6 @@ def register_prompt(spec: PromptSpec, *, lint: bool = True) -> PromptSpec:
     return spec
 
 
-def get_spec(task: str, version: str) -> PromptSpec:
-    try:
-        return _REGISTRY[(task, version)]
-    except KeyError as exc:
-        raise PromptRegistryError(f"prompt {task}/{version} is not registered") from exc
-
-
-def is_registered(task: str, version: str) -> bool:
-    return (task, version) in _REGISTRY
-
-
-def available_versions(task: str) -> list[str]:
-    return sorted(v for (t, v) in _REGISTRY if t == task)
-
-
 def content_fingerprint(task: str, version: str) -> str:
     """Fingerprint of a registered prompt, or ``unregistered`` (never raises)."""
     spec = _REGISTRY.get((task, version))
@@ -136,7 +118,11 @@ def content_fingerprint(task: str, version: str) -> str:
 
 def build(task: str, version: str, *args: Any, **kwargs: Any) -> tuple[str, str]:
     """``(system_prompt, user_prompt)`` for ``task`` at ``version``."""
-    return get_spec(task, version).builder(*args, **kwargs)
+    try:
+        spec = _REGISTRY[(task, version)]
+    except KeyError as exc:
+        raise PromptRegistryError(f"prompt {task}/{version} is not registered") from exc
+    return spec.builder(*args, **kwargs)
 
 
 def verify_lock() -> list[str]:

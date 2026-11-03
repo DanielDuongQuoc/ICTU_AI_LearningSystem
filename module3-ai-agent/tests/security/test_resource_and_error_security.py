@@ -197,7 +197,7 @@ async def test_cors_is_off_by_default(client):
 @pytest.mark.parametrize("overrides", [
     {"max_pdf_pages": 0}, {"max_extracted_chars": 0}, {"max_chunks_per_document": -1},
     {"pdf_processing_timeout_s": 0}, {"max_request_body_bytes": 0}, {"max_llm_output_chars": 0},
-    {"stream_max_duration_s": 0}, {"rate_limit_per_minute": -1}, {"admin_api_token": "short"},
+    {"stream_max_duration_s": 0}, {"rate_limit_per_minute": -1},
     {"app_env": "production", "cors_allowed_origins": "*"}, {"app_env": "production", "log_level": "DEBUG"},
 ])
 def test_insecure_configuration_is_rejected(overrides):

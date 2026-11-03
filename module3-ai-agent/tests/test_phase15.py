@@ -86,7 +86,7 @@ def test_source_has_no_hardcoded_deployment_values():
 def test_error_matrix_matches_implementation():
     rows = re.findall(r"^\|\s*(\d{3})\s*\|\s*`([A-Z_]+)`\s*\|", (ROOT / "docs" / "INTEGRATION_CONTRACT.md").read_text(encoding="utf-8"), re.M)
     documented = {code: int(status) for status, code in rows}
-    assert documented == {str(k): v for k, v in ERROR_HTTP_STATUS.items() if not str(k).startswith(("AI_VERSION", "ADMIN_"))}
+    assert documented == {str(k): v for k, v in ERROR_HTTP_STATUS.items()}
     for must_exist in ("EMPTY_QUERY", "DOCUMENT_NOT_FOUND", "FILE_TOO_LARGE", "OLLAMA_UNAVAILABLE",
                        "OLLAMA_TIMEOUT", "OLLAMA_MODEL_NOT_FOUND", "CHROMA_ERROR", "VALIDATION_ERROR",
                        "INTERNAL_SERVER_ERROR", "INVALID_FILE"):

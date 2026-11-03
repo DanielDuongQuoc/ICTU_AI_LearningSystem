@@ -16,7 +16,6 @@ A throw-away ChromaDB in a temp directory is used; application data is never tou
 from __future__ import annotations
 
 import argparse
-import asyncio
 import hashlib
 import json
 import platform

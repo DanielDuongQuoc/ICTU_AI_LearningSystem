@@ -35,7 +35,7 @@ WORKDIR /app
 
 RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --home-dir /app --no-create-home app \
-    && mkdir -p /app/data/chroma /app/data/ai_versions /app/uploads \
+    && mkdir -p /app/data/chroma /app/uploads \
     && chown -R app:app /app
 
 COPY --from=builder /opt/venv /opt/venv

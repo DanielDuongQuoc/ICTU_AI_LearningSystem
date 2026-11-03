@@ -114,13 +114,6 @@ class Settings(BaseSettings):
     # In-process (single instance); clients behind one proxy share a bucket - see docs/SECURITY.md.
     rate_limit_per_minute: int = Field(120)
 
-    # AI governance (Phase 18). ADMIN_API_TOKEN empty = the /api/ai-versions admin API is DISABLED.
-    # The token is a shared secret: set it only through the environment, never commit it.
-    admin_api_token: str = Field("", repr=False)
-    ai_versions_dir: str = Field("./data/ai_versions")
-    # Optional JSON file overriding the promotion-gate policy defaults (see docs/QUALITY_GATES.md).
-    ai_gate_policy_file: str = Field("")
-
     # CORS: comma-separated origins. Empty (default) = CORS disabled (server-to-server use).
     cors_allowed_origins: str = Field("")
 
@@ -263,8 +256,6 @@ class Settings(BaseSettings):
             errors.append("MAX_CONCURRENT_UPLOADS must be >= 0 (0 = unlimited)")
         if self.rate_limit_per_minute < 0:
             errors.append("RATE_LIMIT_PER_MINUTE must be >= 0 (0 = disabled)")
-        if self.admin_api_token and len(self.admin_api_token) < 16:
-            errors.append("ADMIN_API_TOKEN must be at least 16 characters when set")
         if self.app_env == "production":
             if "*" in self.cors_origins:
                 errors.append("CORS_ALLOWED_ORIGINS must not contain '*' in production")
