@@ -98,3 +98,4 @@ def run_tests(src: Path, cfg: AgentConfig) -> TestOutcome:
     passed, failed = parse_counts(output)
     return TestOutcome(executed=True, passed=passed, failed=failed, exit_code=proc.returncode,
                        output_tail=output[-MAX_OUTPUT_CHARS:])
+

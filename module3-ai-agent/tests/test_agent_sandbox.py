@@ -76,3 +76,4 @@ async def test_runner_passes_test_results_or_flags_not_executed(assignment, tmp_
     monkeypatch.setattr(sb, "docker_available", lambda: False)
     st2 = (await run(cfg2, ServiceBackend(FakeLLM(judgement({"C1": "Đầy đủ", "C2": "Đầy đủ", "C3": "Đầy đủ"}))))).entries
     assert st2["SV001"]["status"] == "needs_review" and "not_executed" in st2["SV001"]["flags"]
+

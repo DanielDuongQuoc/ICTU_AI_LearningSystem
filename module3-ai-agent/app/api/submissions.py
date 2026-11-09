@@ -68,3 +68,4 @@ async def transcribe_handwritten(
     return await _get_transcription_service().transcribe(
         blobs, question=question, language=language.lower(), mask_header_ratio=mask_header_ratio,
         request_id=get_request_id(request))
+

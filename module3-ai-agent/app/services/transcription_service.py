@@ -172,3 +172,4 @@ def get_transcription_service() -> TranscriptionService:
     if _transcription_service is None:
         _transcription_service = TranscriptionService()
     return _transcription_service
+

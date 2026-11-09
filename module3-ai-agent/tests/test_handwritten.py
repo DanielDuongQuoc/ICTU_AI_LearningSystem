@@ -155,3 +155,4 @@ async def test_gemini_payload_carries_inline_images():
     await svc.generate_json("sys", "user2")
     assert seen[1]["contents"][0]["parts"] == [{"text": "user2"}]     # text-only calls unchanged
     await svc.close()
+

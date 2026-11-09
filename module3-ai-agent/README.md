@@ -156,6 +156,7 @@ pytest -m integration              # optional: needs a real GEMINI_API_KEY
 ruff check --select E9,F app scripts tests agent
 python scripts/release_check.py    # static release checks
 python scripts/evaluate_rag.py     # offline retrieval-quality metrics (Hit/Precision/Recall@K)
+python scripts/prompt_eval.py --repeat 2   # REAL Gemini: grading golden cases (tests/golden), report in reports/
 ```
 
 Backups of the Chroma directory: `python scripts/backup.py` / `python scripts/restore.py` (stop the API first).

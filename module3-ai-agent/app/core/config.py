@@ -61,7 +61,9 @@ class Settings(BaseSettings):
     # AI review pass after rubric generation (coverage / observable descriptors); costs one extra model call.
     rubric_review_enabled: bool = Field(True)
     # A criterion counts as "met" (homework PASS/FAIL) when the chosen level is worth >= this share of its points.
-    grading_criterion_met_ratio: float = Field(0.5)
+    # 0.6: on a 3-level rubric only the top level counts; on a 4-level rubric the top two do (a "partial" level
+    # such as "only names the concept" must not let a homework pass).
+    grading_criterion_met_ratio: float = Field(0.6)
     # Max characters of one graded submission (typed answer, transcript or concatenated source files).
     max_submission_chars: int = Field(60000)
     # Max submissions in one /api/grading/batch request.

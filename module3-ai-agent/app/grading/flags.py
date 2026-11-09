@@ -25,6 +25,8 @@ _INJECTION_PATTERNS = [
     r"(marks?|points?|score|grade)",
     r"\b(mark|grade)\s+(this|me)\s+(as\s+)?(pass(ed)?|correct|full)",
     r"system\s+prompt",
+    r"(?:^|[\s.!?])system\s*:\s*\S",
+    r"\b(the\s+)?(grader|examiner|assistant|model)\s+(must|should|has\s+to)\s+(give|award|mark|grade|assign)",
     r"you\s+are\s+now\s+",
     r"\bas\s+an?\s+(ai|language\s+model|grader)\b.*\b(must|should)\b",
     r"bỏ\s+qua\s+(các\s+|mọi\s+|tất\s+cả\s+)?(hướng\s+dẫn|chỉ\s+dẫn|yêu\s+cầu|quy\s+tắc)",

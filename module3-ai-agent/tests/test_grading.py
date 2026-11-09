@@ -62,12 +62,20 @@ def req(ctx="homework", rubric=None, answer=ANSWER, **kw) -> GradeRequest:
 # ============================================================ homework: PASS / FAIL
 
 async def test_homework_pass_when_required_met_and_threshold_reached():
-    llm = FakeLLM(judgement({"C1": "Đầy đủ", "C2": "Một phần", "C3": "Không đạt"}))
+    llm = FakeLLM(judgement({"C1": "Đầy đủ", "C2": "Đầy đủ", "C3": "Không đạt"}))
     res = await GradingService(llm_service=llm).grade(req())
     assert res.grading_mode == "pass_fail" and res.status == "final" and res.result == "PASS"
     assert res.suggested_total is None and res.max_score is None
     assert all(c.points is None for c in res.criteria)            # no points shown for homework
-    assert [c.met for c in res.criteria] == [True, True, False]   # "Một phần" = 50% of max -> met
+    assert [c.met for c in res.criteria] == [True, True, False]
+
+
+async def test_partial_levels_do_not_count_as_met_by_default():
+    # Live prompt evaluation: an answer that only names every concept got "Một phần" (50%) everywhere and
+    # PASSED with a 0.5 ratio. Default GRADING_CRITERION_MET_RATIO is 0.6 -> partial levels are not "met".
+    llm = FakeLLM(judgement({"C1": "Một phần", "C2": "Một phần", "C3": "Một phần"}))
+    res = await GradingService(llm_service=llm).grade(req())
+    assert res.result == "FAIL" and res.unmet_required == ["C1"] and not any(c.met for c in res.criteria)
 
 
 async def test_homework_fails_when_a_required_criterion_is_missed_even_above_threshold():

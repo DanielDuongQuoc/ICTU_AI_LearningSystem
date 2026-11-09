@@ -1,0 +1,39 @@
+{
+  "max_score": 10,
+  "grounded": false,
+  "status": "approved",
+  "pass_rule": {"all_required_met": true, "min_percentage": 50},
+  "criteria": [
+    {"criterion_id": "C1", "name": "Khái niệm giao dịch", "description": "Giao dịch là đơn vị công việc logic, thực hiện trọn vẹn hoặc không.",
+     "max_points": 2, "required": true, "key_points": ["đơn vị công việc", "trọn vẹn hoặc không"],
+     "levels": [
+       {"label": "Đầy đủ", "points": 2, "descriptor": "Nêu cả hai ý: nhóm thao tác là một đơn vị và thực hiện trọn vẹn hoặc không"},
+       {"label": "Một phần", "points": 1, "descriptor": "Nêu được một trong hai ý trên"},
+       {"label": "Không đạt", "points": 0, "descriptor": "Không nêu ý nào hoặc chỉ đưa ví dụ"}]},
+    {"criterion_id": "C2", "name": "Atomicity", "description": "Tính nguyên tử",
+     "max_points": 2, "required": true, "key_points": ["tất cả hoặc không"],
+     "levels": [
+       {"label": "Đầy đủ", "points": 2, "descriptor": "Nêu tên và giải thích đúng: mọi thao tác thực hiện hết hoặc không thao tác nào"},
+       {"label": "Một phần", "points": 1, "descriptor": "Chỉ nêu tên hoặc giải thích chưa đúng trọng tâm"},
+       {"label": "Không đạt", "points": 0, "descriptor": "Không đề cập hoặc giải thích sai"}]},
+    {"criterion_id": "C3", "name": "Consistency", "description": "Tính nhất quán",
+     "max_points": 2, "required": false, "key_points": ["trạng thái hợp lệ"],
+     "levels": [
+       {"label": "Đầy đủ", "points": 2, "descriptor": "Giải thích CSDL chuyển từ trạng thái hợp lệ sang trạng thái hợp lệ"},
+       {"label": "Một phần", "points": 1, "descriptor": "Chỉ nêu tên hoặc nói chung chung là dữ liệu đúng"},
+       {"label": "Không đạt", "points": 0, "descriptor": "Không đề cập hoặc giải thích sai"}]},
+    {"criterion_id": "C4", "name": "Isolation", "description": "Tính cô lập",
+     "max_points": 2, "required": false, "key_points": ["giao dịch đồng thời không ảnh hưởng nhau"],
+     "levels": [
+       {"label": "Đầy đủ", "points": 2, "descriptor": "Giải thích các giao dịch đồng thời không thấy kết quả dở dang của nhau"},
+       {"label": "Một phần", "points": 1, "descriptor": "Chỉ nêu tên hoặc giải thích mơ hồ"},
+       {"label": "Không đạt", "points": 0, "descriptor": "Không đề cập hoặc giải thích sai"}]},
+    {"criterion_id": "C5", "name": "Durability", "description": "Tính bền vững",
+     "max_points": 2, "required": false, "key_points": ["commit không mất khi có sự cố"],
+     "levels": [
+       {"label": "Đầy đủ", "points": 2, "descriptor": "Giải thích kết quả đã commit không mất kể cả khi có sự cố"},
+       {"label": "Một phần", "points": 1, "descriptor": "Chỉ nêu tên hoặc nói dữ liệu được lưu mà không nhắc commit/sự cố"},
+       {"label": "Không đạt", "points": 0, "descriptor": "Không đề cập hoặc giải thích sai"}]}
+  ]
+}
+

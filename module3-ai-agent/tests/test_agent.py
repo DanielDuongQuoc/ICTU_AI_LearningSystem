@@ -148,7 +148,7 @@ def test_zip_bomb_limit(assignment: AgentConfig):
 
 
 async def test_run_grades_homework_and_exports(assignment: AgentConfig):
-    backend = ServiceBackend(FakeLLM(judgement({"C1": "Đầy đủ", "C2": "Một phần", "C3": "Không đạt"})))
+    backend = ServiceBackend(FakeLLM(judgement({"C1": "Đầy đủ", "C2": "Đầy đủ", "C3": "Không đạt"})))
     summary = await run(assignment, backend)
     st = summary.entries
     assert st["SV001"]["result"] == "PASS" and st["SV001"]["status"] == "final"
