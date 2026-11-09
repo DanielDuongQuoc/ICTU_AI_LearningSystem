@@ -29,6 +29,10 @@ backward compatibility (see [Legacy names](#legacy-names)).
 | `POST /api/questions/generate-matrix` | Exam matrix (several type/difficulty rows) | `MatrixGenerationResponse` |
 | `POST /api/evaluations/evaluate` | Score a student answer | `EvaluationResponse` |
 | `POST /api/evaluations/evaluate/stream` | Same evaluation as Server-Sent Events | `text/event-stream` |
+| `POST /api/rubrics/generate` | Draft an analytic rubric (criteria x levels) for a question | `RubricGenerateResponse` |
+| `POST /api/rubrics/validate` | Check a rubric against the code rules (no AI call) | `RubricValidationResponse` |
+| `POST /api/grading/grade` | Grade one submission with an approved rubric (homework PASS/FAIL, in-class points) | `GradeResult` |
+| `POST /api/grading/batch` | Grade several submissions of one question | `GradeBatchResponse` |
 | `GET /metrics` | Prometheus text metrics (internal, not in OpenAPI) | text |
 | `GET /docs`, `GET /openapi.json` | API documentation | |
 
@@ -124,6 +128,53 @@ Request-field problems are reported as `error` events with HTTP 200. Through a C
 `HttpCompletionOption.ResponseHeadersRead`, flush per chunk, disable response compression/proxy buffering
 for this route, and keep read timeouts above `LLM_TIMEOUT` (120 s) — no keep-alive comments are sent.
 
+## Rubrics and grading
+
+Two assessment contexts decide how a submission is graded. The caller never chooses the mode:
+
+| `assessment_context` | Who decides | Result | `status` |
+|---|---|---|---|
+| `homework` | AI / Grading Agent, automatically | `result`: `PASS` or `FAIL` + feedback (no points) | `final`, or `needs_review` when a review flag is raised |
+| `in_class` | The lecturer | `suggested_total` + points per criterion + reasons/evidence | always `pending_review` |
+
+`POST /api/rubrics/generate`
+
+```json
+{"assessment_context": "homework", "question": "...", "expected_answer": "...", "max_score": 10,
+ "document_ids": ["<uuid>"], "course_context": {"course_name": "Cơ sở dữ liệu", "clos": [{"code": "CLO2", "description": "..."}]},
+ "language": "vi"}
+```
+
+`document_ids` (0-5) and `course_context` are optional; without documents the rubric has `grounded=false`.
+Response `{"rubric": Rubric, "review_applied", "review_issues": [...], "model", "prompt_version"}`. The rubric is a
+`draft`; the lecturer edits it, may check it with `POST /api/rubrics/validate` (`{"rubric", "assessment_context"?}` →
+`{"valid", "violations": [{"rule", "criterion_id", "message"}]}`) and stores it with `status: "approved"`.
+
+`Rubric`: `{"max_score", "criteria": [{"criterion_id", "name", "description", "max_points", "required",
+"key_points", "levels": [{"label", "points", "descriptor"}], "clo"?, "bloom_level"?, "source_chunks"}],
+"pass_rule": {"all_required_met": true, "min_percentage": 50}, "grounded", "status"}`. Rules: R1 points sum to
+`max_score`; R2 >= 3 levels, strictly decreasing, top = `max_points`, bottom = 0; R4 no duplicate criteria;
+R6 grounded criteria carry `source_chunks`; homework needs a pass rule that can fail.
+
+`POST /api/grading/grade`
+
+```json
+{"assessment_context": "in_class", "submission_kind": "typed", "question": "...", "rubric": {"...": "approved rubric"},
+ "answer": "...", "expected_answer": "...", "submission_ref": "SV001", "language": "vi"}
+```
+
+`submission_kind`: `typed` | `handwritten_transcript` | `code`. `submission_ref` is an anonymous id (no names).
+Response (`GradeResult`): `{"assessment_context", "grading_mode", "status", "result"?, "unmet_required",
+"suggested_total"?, "max_score"?, "criteria": [{"criterion_id", "name", "required", "level", "met", "points"?,
+"max_points"?, "reason", "evidence"}], "feedback", "flags", "warnings", "trace": {"model", "prompt_version",
+"request_id", "grounded"}}`. Points, totals and PASS/FAIL are computed by the backend from the rubric; the model
+only picks one level label per criterion. Review flags: `injection_suspected`, `no_valid_files`, `unreadable`,
+`truncated`, `not_executed`, `grading_error`; warnings: `empty_or_off_topic`, `ungrounded_rubric`.
+
+`POST /api/grading/batch`: `{"assessment_context", "question", "rubric", "expected_answer"?, "document_ids"?,
+"submissions": [{"submission_ref", "answer", "submission_kind"?}]}` (max `MAX_BATCH_SUBMISSIONS`) →
+`{"total", "succeeded", "failed", "results": [{"submission_ref", "ok", "result"?, "error"?}]}`.
+
 ## Health
 
 ```json
@@ -149,6 +200,7 @@ Validation failures are 422 `VALIDATION_ERROR`; rate limit 429 `RATE_LIMITED` wi
 | 400 | `EMPTY_QUERY` | RAG question is empty |
 | 400 | `EMPTY_QUESTION` | Evaluation question is empty |
 | 400 | `EMPTY_STUDENT_ANSWER` | student_answer is empty |
+| 400 | `EMPTY_SUBMISSION` | Submission to grade is empty |
 | 400 | `HTTP_ERROR` | Other HTTP error raised by the framework |
 | 400 | `INPUT_TOO_LONG` | question > MAX_QUESTION_CHARS or answer > MAX_ANSWER_CHARS |
 | 400 | `INVALID_DIFFICULTY` | difficulty not easy/medium/hard |
@@ -168,10 +220,13 @@ Validation failures are 422 `VALIDATION_ERROR`; rate limit 429 `RATE_LIMITED` wi
 | 413 | `REQUEST_TOO_LARGE` | JSON body exceeds MAX_REQUEST_BODY_BYTES |
 | 422 | `INSUFFICIENT_CONTEXT` | Retrieved context is not enough; the LLM is NOT called |
 | 422 | `NO_EXTRACTABLE_TEXT` | No extractable text (e.g. scanned images, no OCR) |
+| 422 | `RUBRIC_INVALID` | Rubric violates the rubric rules (generation after one repair, or grading input) |
+| 422 | `RUBRIC_NOT_APPROVED` | Grading requested with a rubric whose status is not `approved` |
 | 422 | `VALIDATION_ERROR` | Request body/params fail schema validation |
 | 429 | `RATE_LIMITED` | Per-client rate limit exceeded (see Retry-After) |
 | 500 | `APPLICATION_CONFIGURATION_ERROR` | Invalid configuration (startup failure; not an HTTP response) |
 | 500 | `EVALUATION_ERROR` | Unexpected failure during evaluation |
+| 500 | `GRADING_ERROR` | Unexpected failure during rubric-based grading |
 | 500 | `INDEXING_ERROR` | Failed to store chunks (or embedding-model mismatch, re-index needed) |
 | 500 | `INTERNAL_SERVER_ERROR` | Unhandled internal error (details only in server logs) |
 | 500 | `PROCESSING_ERROR` | Unexpected failure while processing the file |
@@ -181,12 +236,14 @@ Validation failures are 422 `VALIDATION_ERROR`; rate limit 429 `RATE_LIMITED` wi
 | 502 | `EMBEDDING_ERROR` | Embedding step failed during retrieval |
 | 502 | `EMBEDDING_INVALID_RESPONSE` | Gemini returned a malformed embedding or an unexpected HTTP status |
 | 502 | `EVALUATION_INVALID_RESPONSE` | Model evaluation JSON invalid / inconsistent |
+| 502 | `GRADING_INVALID_RESPONSE` | Model grading output invalid (unknown criterion/level) after one retry |
 | 502 | `LLM_EMPTY_RESPONSE` | Model returned empty output |
 | 502 | `LLM_INVALID_JSON` | Model output is not valid JSON (after one retry) |
 | 502 | `LLM_OUTPUT_REJECTED` | Model output rejected (too large / leaked prompt) |
 | 502 | `OLLAMA_GENERATION_ERROR` | Gemini returned an error status (incl. persistent 429 quota errors) |
 | 502 | `OLLAMA_INVALID_RESPONSE` | Gemini returned a malformed response |
 | 502 | `QUESTION_GENERATION_INVALID_RESPONSE` | Model produced no valid questions |
+| 502 | `RUBRIC_GENERATION_ERROR` | Rubric generation failed upstream |
 | 503 | `CHROMA_ERROR` | Vector store operation failed / unavailable |
 | 503 | `EMBEDDING_MODEL_NOT_FOUND` | GEMINI_EMBEDDING_MODEL does not exist |
 | 503 | `EMBEDDING_SERVICE_UNAVAILABLE` | Gemini embedding endpoint unreachable or API key missing |

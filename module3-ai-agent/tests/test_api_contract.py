@@ -846,7 +846,10 @@ def test_openapi_contains_exactly_the_documented_contract_endpoints():
     # Real, previously documented endpoints that are not in the original contract list: document search and the
     # exam matrix. Anything else would be an unreviewed surface.
     known = {("post", "/api/documents/{document_id}/search"),
-             ("post", "/api/questions/generate-matrix")}  # reviewed additive endpoint (exam matrix, docs/INTEGRATION_CONTRACT.md)
+             ("post", "/api/questions/generate-matrix"),  # reviewed additive endpoint (exam matrix, docs/INTEGRATION_CONTRACT.md)
+             # reviewed additive endpoints: rubric generation/validation and rubric-based grading
+             ("post", "/api/rubrics/generate"), ("post", "/api/rubrics/validate"),
+             ("post", "/api/grading/grade"), ("post", "/api/grading/batch")}
     assert all((m, p) in known for m, p in extra), f"undocumented API surface: {extra}"
 
 

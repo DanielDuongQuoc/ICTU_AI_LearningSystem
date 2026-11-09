@@ -57,6 +57,16 @@ class Settings(BaseSettings):
     # Exam matrix: maximum total number of questions in one /api/questions/generate-matrix request.
     max_matrix_questions: int = Field(50)
 
+    # Rubrics and rubric-based grading.
+    # AI review pass after rubric generation (coverage / observable descriptors); costs one extra model call.
+    rubric_review_enabled: bool = Field(True)
+    # A criterion counts as "met" (homework PASS/FAIL) when the chosen level is worth >= this share of its points.
+    grading_criterion_met_ratio: float = Field(0.5)
+    # Max characters of one graded submission (typed answer, transcript or concatenated source files).
+    max_submission_chars: int = Field(60000)
+    # Max submissions in one /api/grading/batch request.
+    max_batch_submissions: int = Field(20)
+
     # Observability
     slow_request_threshold_ms: int = Field(5000)
     # Phase 20: per-stage slow warnings (LLM stages are slow by nature, so they get their own threshold).
@@ -233,6 +243,12 @@ class Settings(BaseSettings):
             errors.append("EMBEDDING_QUEUE_TIMEOUT_S must be > 0")
         if self.max_matrix_questions <= 0:
             errors.append("MAX_MATRIX_QUESTIONS must be > 0")
+        if not (0.0 < self.grading_criterion_met_ratio <= 1.0):
+            errors.append("GRADING_CRITERION_MET_RATIO must be in (0, 1]")
+        if self.max_submission_chars <= 0:
+            errors.append("MAX_SUBMISSION_CHARS must be > 0")
+        if self.max_batch_submissions <= 0:
+            errors.append("MAX_BATCH_SUBMISSIONS must be > 0")
         if self.log_level.strip() and self.log_level.strip().upper() not in {
             "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
         }:

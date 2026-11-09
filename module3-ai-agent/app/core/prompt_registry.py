@@ -24,12 +24,19 @@ from app.core import prompts as P
 TASK_RAG_ANSWER = "rag_answer"
 TASK_QUESTION_GENERATION = "question_generation"
 TASK_ANSWER_EVALUATION = "answer_evaluation"
-TASKS = (TASK_RAG_ANSWER, TASK_QUESTION_GENERATION, TASK_ANSWER_EVALUATION)
+TASK_RUBRIC_GENERATION = "rubric_generation"
+TASK_RUBRIC_REVIEW = "rubric_review"
+TASK_RUBRIC_GRADING = "rubric_grading"
+TASKS = (TASK_RAG_ANSWER, TASK_QUESTION_GENERATION, TASK_ANSWER_EVALUATION,
+         TASK_RUBRIC_GENERATION, TASK_RUBRIC_REVIEW, TASK_RUBRIC_GRADING)
 
 DEFAULT_PROMPT_VERSIONS: dict[str, str] = {
     TASK_RAG_ANSWER: P.PROMPT_VERSION,
     TASK_QUESTION_GENERATION: P.QUESTION_GENERATION_PROMPT_VERSION,
     TASK_ANSWER_EVALUATION: P.EVALUATION_PROMPT_VERSION,
+    TASK_RUBRIC_GENERATION: P.RUBRIC_GENERATION_PROMPT_VERSION,
+    TASK_RUBRIC_REVIEW: P.RUBRIC_REVIEW_PROMPT_VERSION,
+    TASK_RUBRIC_GRADING: P.RUBRIC_GRADING_PROMPT_VERSION,
 }
 
 # Committed fingerprints of the shipped prompts. Changing prompt text requires a NEW version
@@ -38,6 +45,9 @@ PROMPT_LOCK: dict[tuple[str, str], str] = {
     (TASK_RAG_ANSWER, "v1"): "3237d0def1c1f0a29c4e5b2d9dcbb57e50809d7da576bec8ffdeb115a62d0f29",
     (TASK_QUESTION_GENERATION, "v1"): "9d40603f91d40796ece2c741e91aa7ffd8afffd5f2903e0ec1a6e6ef8e4d6135",
     (TASK_ANSWER_EVALUATION, "v1"): "d37c9a3b7943f21efba25c96bea3a8ddd87be94031f403400603b03329f56423",
+    (TASK_RUBRIC_GENERATION, "v1"): "69aa16ed6580a0fe94bb94c308ecec2cbe4270a623054f1708085871d4629c30",
+    (TASK_RUBRIC_REVIEW, "v1"): "90e2eb93e224702646384a69dc1568be07a5b81de9d4df10e2a85be86b1136ad",
+    (TASK_RUBRIC_GRADING, "v1"): "36b407e4abe1c215dd361366c975e4ee16029c1f08b3717349e93d42ee854bf9",
 }
 
 
@@ -151,6 +161,19 @@ def _register_builtin() -> None:
         TASK_ANSWER_EVALUATION, P.EVALUATION_PROMPT_VERSION, P.build_evaluation_prompt,
         texts=(P.EVALUATION_SYSTEM_PROMPT, P.EVALUATION_USER_PROMPT_TEMPLATE),
         system_texts=(P.EVALUATION_SYSTEM_PROMPT,), description="Answer evaluation (grading)"))
+    register_prompt(PromptSpec(
+        TASK_RUBRIC_GENERATION, P.RUBRIC_GENERATION_PROMPT_VERSION, P.build_rubric_generation_prompt,
+        texts=(P.RUBRIC_GENERATION_SYSTEM_PROMPT, P.RUBRIC_GENERATION_USER_PROMPT_TEMPLATE,
+               *(f"{k}={v}" for k, v in sorted(P.RUBRIC_ASSESSMENT_NOTES.items()))),
+        system_texts=(P.RUBRIC_GENERATION_SYSTEM_PROMPT,), description="Analytic rubric generation"))
+    register_prompt(PromptSpec(
+        TASK_RUBRIC_REVIEW, P.RUBRIC_REVIEW_PROMPT_VERSION, P.build_rubric_review_prompt,
+        texts=(P.RUBRIC_REVIEW_SYSTEM_PROMPT, P.RUBRIC_REVIEW_USER_PROMPT_TEMPLATE),
+        system_texts=(P.RUBRIC_REVIEW_SYSTEM_PROMPT,), description="Rubric review (coverage / observability)"))
+    register_prompt(PromptSpec(
+        TASK_RUBRIC_GRADING, P.RUBRIC_GRADING_PROMPT_VERSION, P.build_rubric_grading_prompt,
+        texts=(P.RUBRIC_GRADING_SYSTEM_PROMPT, P.RUBRIC_GRADING_USER_PROMPT_TEMPLATE),
+        system_texts=(P.RUBRIC_GRADING_SYSTEM_PROMPT,), description="Rubric-based grading (level per criterion)"))
 
 
 _register_builtin()

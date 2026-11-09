@@ -29,6 +29,8 @@ CONTRACT = {
     ("post", "/api/rag/retrieve"), ("post", "/api/rag/answer"),
     ("post", "/api/questions/generate"), ("post", "/api/questions/generate-matrix"),
     ("post", "/api/evaluations/evaluate"), ("post", "/api/evaluations/evaluate/stream"),
+    ("post", "/api/rubrics/generate"), ("post", "/api/rubrics/validate"),
+    ("post", "/api/grading/grade"), ("post", "/api/grading/batch"),
 }
 
 
