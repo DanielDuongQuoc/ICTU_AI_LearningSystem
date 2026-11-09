@@ -1,0 +1,17 @@
+# Example assignment config for the Grading Agent (copy next to your submissions and edit).
+#   python -m agent scan  -c agent/examples/agent.yaml
+#   python -m agent grade -c agent/examples/agent.yaml
+assessment_context: homework          # homework -> PASS/FAIL, auto-final | in_class -> points, lecturer review
+submissions_dir: ./submissions        # one sub-folder or .zip per student: <MSSV>_<HoTen>
+question_file: ./de_bai.md
+rubric_file: ./rubric_approved.json   # must have "status": "approved"
+expected_answer_file: null            # optional reference solution / key ideas
+output_dir: ./results
+naming_pattern: "^(?P<student_ref>(?=[A-Za-z0-9]*\\d)[A-Za-z0-9]+)(?:[_\\- .].*)?$"   # MSSV must contain a digit
+accepted_extensions: [.cs, .java, .py, .c, .cpp, .h, .hpp]
+exclude_dirs: [bin, obj, node_modules, .git, .vs, .vscode, .idea, __pycache__, venv, .venv, dist, build, target]
+max_file_kb: 200                      # larger files are rejected (too_large)
+max_total_kb: 58                      # text sent to the model per student; beyond it -> truncated (needs review)
+mode: local                           # local: grading core in this process | api: call the AI Service
+api_url: http://localhost:8003
+language: vi

@@ -1,0 +1,47 @@
+{
+  "max_score": 10,
+  "grounded": false,
+  "status": "approved",
+  "pass_rule": {"all_required_met": true, "min_percentage": 50},
+  "criteria": [
+    {
+      "criterion_id": "C1",
+      "name": "Tính đúng tổng, max, min",
+      "description": "Chương trình tính và in đúng tổng, giá trị lớn nhất, giá trị nhỏ nhất của danh sách.",
+      "max_points": 5,
+      "required": true,
+      "key_points": ["tính tổng", "tìm max", "tìm min"],
+      "levels": [
+        {"label": "Đầy đủ", "points": 5, "descriptor": "Tính đúng cả 3 giá trị tổng, max, min cho mọi danh sách khác rỗng"},
+        {"label": "Một phần", "points": 2.5, "descriptor": "Tính đúng 1 hoặc 2 trong 3 giá trị, hoặc sai khi danh sách có số âm"},
+        {"label": "Không đạt", "points": 0, "descriptor": "Không tính được giá trị nào đúng"}
+      ]
+    },
+    {
+      "criterion_id": "C2",
+      "name": "Kiểm tra dữ liệu nhập",
+      "description": "Phát hiện dữ liệu không phải số và thông báo lỗi, chương trình không bị dừng đột ngột.",
+      "max_points": 3,
+      "required": true,
+      "key_points": ["bắt lỗi nhập", "thông báo lỗi"],
+      "levels": [
+        {"label": "Đầy đủ", "points": 3, "descriptor": "Bắt lỗi khi nhập chữ hoặc rỗng, in thông báo và cho nhập lại hoặc bỏ qua giá trị sai"},
+        {"label": "Một phần", "points": 1.5, "descriptor": "Có bắt lỗi nhưng chỉ cho một trường hợp, hoặc dừng chương trình sau khi báo lỗi"},
+        {"label": "Không đạt", "points": 0, "descriptor": "Không có xử lý nào cho dữ liệu nhập sai"}
+      ]
+    },
+    {
+      "criterion_id": "C3",
+      "name": "Cấu trúc và đặt tên",
+      "description": "Mã nguồn tách hàm hợp lý, tên biến và hàm có nghĩa.",
+      "max_points": 2,
+      "required": false,
+      "key_points": ["tách hàm", "đặt tên có nghĩa"],
+      "levels": [
+        {"label": "Đầy đủ", "points": 2, "descriptor": "Có ít nhất một hàm riêng cho phần tính toán và mọi tên biến đều có nghĩa"},
+        {"label": "Một phần", "points": 1, "descriptor": "Toàn bộ code trong hàm main hoặc có tên biến một ký tự không rõ nghĩa"},
+        {"label": "Không đạt", "points": 0, "descriptor": "Code khó đọc, không thể xác định vai trò các biến"}
+      ]
+    }
+  ]
+}

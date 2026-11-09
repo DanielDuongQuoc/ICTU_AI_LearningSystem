@@ -113,12 +113,42 @@ documents must be re-uploaded (attach a persistent disk at `/app/data/chroma` on
 - Keep `LLM_MAX_CONCURRENCY` low on free keys to avoid bursts of 429s.
 - `/health` calls the Gemini models endpoint (no tokens consumed).
 
-## 6. Tests and checks
+## 6. Rubrics, grading and the Grading Agent
+
+Two assessment contexts (contract details in [docs/INTEGRATION_CONTRACT.md](docs/INTEGRATION_CONTRACT.md#rubrics-and-grading)):
+
+| `assessment_context` | Graded by | Result | Status |
+|---|---|---|---|
+| `homework` | AI (essays) / Grading Agent (code), automatically | **PASS / FAIL** + feedback | `final` (or `needs_review` if flagged) |
+| `in_class` | AI proposes, **lecturer decides** | points per criterion + `suggested_total` | always `pending_review` |
+
+Flow: `POST /api/rubrics/generate` (draft) → lecturer edits, `POST /api/rubrics/validate`, sets
+`"status": "approved"` → `POST /api/grading/grade` or `/api/grading/batch`. The model only picks one level per
+criterion; points, totals and PASS/FAIL are computed by the backend.
+
+**Grading Agent** (code submissions, runs from this folder, uses the same grading core):
+
+```powershell
+copy agent\examples\agent.yaml D:\BT03\agent.yaml     # edit paths, accepted_extensions, assessment_context
+python -m agent scan  -c D:\BT03\agent.yaml           # who submitted what, which files are accepted / rejected
+python -m agent grade -c D:\BT03\agent.yaml           # grade (resumable), then writes results.csv / feedback/
+python -m agent export -c D:\BT03\agent.yaml          # re-export from saved progress
+```
+
+- One sub-folder or `.zip` per student named `<MSSV>_<Name>` (`naming_pattern`).
+- Only files with `accepted_extensions` are graded; `bin/`, `obj/`, `.git/`, binaries, empty and oversized
+  files are rejected with a reason (`scan_report.csv`). Zips are extracted safely (no `../` paths, size limits).
+- Nothing gradable → `no_valid_files`; submission cut to `max_total_kb` → `truncated`: both go to the lecturer
+  (`needs_review`), never auto-FAIL.
+- Progress is saved after every student in `output_dir/state.json`; on quota errors the run stops and the same
+  command continues where it left off. `mode: api` calls a running AI Service instead of grading in-process.
+
+## 7. Tests and checks
 
 ```powershell
 pytest -q                          # offline suite, Gemini is faked (no network)
 pytest -m integration              # optional: needs a real GEMINI_API_KEY
-ruff check --select E9,F app scripts tests
+ruff check --select E9,F app scripts tests agent
 python scripts/release_check.py    # static release checks
 python scripts/evaluate_rag.py     # offline retrieval-quality metrics (Hit/Precision/Recall@K)
 ```

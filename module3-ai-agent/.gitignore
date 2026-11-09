@@ -55,3 +55,8 @@ Thumbs.db
 logs/
 # Chroma backups
 backups/
+
+# Grading Agent runtime output (results, extracted zips, progress state)
+agent/examples/results/
+agent/examples/submissions/
+results/.work/
