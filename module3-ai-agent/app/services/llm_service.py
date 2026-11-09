@@ -94,6 +94,7 @@ class LLMService(ABC):
         required_keys: Optional[list[str]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        images: Optional[list[tuple[str, bytes]]] = None,
     ) -> Any:
         """Return parsed JSON from the model (one retry if invalid)."""
 

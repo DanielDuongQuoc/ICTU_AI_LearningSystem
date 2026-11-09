@@ -105,7 +105,8 @@ def parse_transcription(raw: Any, page_count: int) -> list[PageTranscript]:
     for i, it in enumerate(items, 1):
         if not isinstance(it, dict) or not isinstance(it.get("text"), str):
             raise bad
-        conf = it.get("confidence") if it.get("confidence") in ("high", "medium", "low") else "low"
+        raw_conf = it.get("confidence")
+        conf: Literal["high", "medium", "low"] = raw_conf if raw_conf in ("high", "medium", "low") else "low"
         text = clamp_text(it["text"].strip(), MAX_PAGE_TEXT_CHARS)
         out.append(PageTranscript(page=i, text=text, confidence=conf, unreadable_count=text.count(UNREADABLE_MARK),
                                   diagram_present=it.get("diagram_present") is True))

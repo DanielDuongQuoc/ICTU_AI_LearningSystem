@@ -81,16 +81,20 @@ def build_result(
     ]
     review, warnings = split_flags(flags)
     status = result_status(ctx, review)
-    common = dict(
-        submission_ref=submission_ref, assessment_context=ctx, grading_mode=mode, status=status,
-        criteria=criteria, feedback=judgement.feedback, flags=review, warnings=warnings,
-        trace=GradeTrace(model=model, prompt_version=judgement.prompt_version, request_id=request_id,
-                         grounded=rubric.grounded),
-    )
+    trace = GradeTrace(model=model, prompt_version=judgement.prompt_version, request_id=request_id,
+                       grounded=rubric.grounded)
     if score_mode:
         total = round(sum(j.level.points for j in judgement.criteria), 2)
-        return GradeResult(**common, suggested_total=total, max_score=rubric.max_score)
-    return GradeResult(**common, result=decide_pass(met, rubric), unmet_required=unmet_required(met, rubric))
+        return GradeResult(
+            submission_ref=submission_ref, assessment_context=ctx, grading_mode=mode, status=status,
+            criteria=criteria, feedback=judgement.feedback, flags=review, warnings=warnings, trace=trace,
+            suggested_total=total, max_score=rubric.max_score,
+        )
+    return GradeResult(
+        submission_ref=submission_ref, assessment_context=ctx, grading_mode=mode, status=status,
+        criteria=criteria, feedback=judgement.feedback, flags=review, warnings=warnings, trace=trace,
+        result=decide_pass(met, rubric), unmet_required=unmet_required(met, rubric),
+    )
 
 
 class GradingService:
