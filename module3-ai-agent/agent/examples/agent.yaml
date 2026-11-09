@@ -15,3 +15,9 @@ max_total_kb: 58                      # text sent to the model per student; beyo
 mode: local                           # local: grading core in this process | api: call the AI Service
 api_url: http://localhost:8003
 language: vi
+# Optional: run the lecturer's tests in a Docker sandbox (no network, read-only, CPU/RAM/time limits).
+# Results are given to the grader as evidence; without Docker the submission is flagged not_executed (needs review).
+# tests_dir: ./tests
+# test_command: "cp -r /work/src /tmp/s && cp -r /work/tests/* /tmp/s && cd /tmp/s && python -m pytest -q"
+# docker_image: python:3.11-slim
+# test_timeout_s: 60

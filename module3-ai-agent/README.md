@@ -142,6 +142,11 @@ python -m agent export -c D:\BT03\agent.yaml          # re-export from saved pro
   (`needs_review`), never auto-FAIL.
 - Progress is saved after every student in `output_dir/state.json`; on quota errors the run stops and the same
   command continues where it left off. `mode: api` calls a running AI Service instead of grading in-process.
+- Optional tests (`tests_dir`, `test_command`, `docker_image`): run in Docker with no network, read-only mounts and
+  CPU/RAM/time limits; the pass/fail counts are given to the grader as evidence and exported. Without Docker the
+  submission is flagged `not_executed` (lecturer review).
+- Handwritten answers: `POST /api/submissions/handwritten/transcribe` (page images → text, page-1 header masked),
+  then grade the text with `submission_kind: "handwritten_transcript"` and `extra_flags` from the transcription.
 
 ## 7. Tests and checks
 

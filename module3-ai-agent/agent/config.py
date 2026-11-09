@@ -34,6 +34,12 @@ class AgentConfig(BaseModel):
     api_url: str = "http://localhost:8003"
     api_timeout_s: float = Field(180.0, gt=0)
     language: str = Field("vi", pattern=r"^[a-z]{2}$")
+    # Optional sandboxed tests (needs Docker). Results are given to the grader as evidence of correctness.
+    tests_dir: Optional[Path] = None
+    test_command: Optional[str] = None
+    docker_image: str = "python:3.11-slim"
+    test_timeout_s: float = Field(60.0, gt=0)
+    test_memory_mb: int = Field(256, gt=0)
 
     @field_validator("accepted_extensions")
     @classmethod
@@ -79,7 +85,7 @@ def load_config(path: str | Path) -> AgentConfig:
     path = Path(path).resolve()
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     base = path.parent
-    for key in ("submissions_dir", "question_file", "rubric_file", "output_dir", "expected_answer_file"):
+    for key in ("submissions_dir", "question_file", "rubric_file", "output_dir", "expected_answer_file", "tests_dir"):
         if data.get(key):
             p = Path(data[key])
             data[key] = p if p.is_absolute() else (base / p).resolve()

@@ -15,6 +15,10 @@ RESULT_LABEL = {"PASS": "Đạt", "FAIL": "Không đạt"}
 STATUS_LABEL = {"final": "Đã chốt", "needs_review": "Chờ GV xem", "pending_review": "Chờ GV duyệt"}
 
 
+def _n(v: Any) -> Any:
+    return "" if v is None else v
+
+
 def export(cfg: AgentConfig, state: dict[str, dict[str, Any]]) -> list[Path]:
     out = cfg.output_dir
     (out / "feedback").mkdir(parents=True, exist_ok=True)
@@ -29,17 +33,23 @@ def export(cfg: AgentConfig, state: dict[str, dict[str, Any]]) -> list[Path]:
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as fh:
         w = csv.writer(fh)
         if cfg.assessment_context == "homework":
-            w.writerow(["student_ref", "ket_qua", "trang_thai", "tieu_chi_bat_buoc_chua_dat", "flags", "warnings"])
+            w.writerow(["student_ref", "ket_qua", "trang_thai", "tieu_chi_bat_buoc_chua_dat", "test_dat", "test_truot",
+                        "flags", "warnings"])
             for r in rows:
+                t = (r.get("files") or {}).get("tests") or {}
                 w.writerow([r["student_ref"], RESULT_LABEL.get(r.get("result") or "", ""),
                             STATUS_LABEL.get(r["status"], r["status"]), ",".join(r.get("unmet_required", [])),
+                            _n(t.get("passed")), _n(t.get("failed")),
                             ",".join(r.get("flags", [])), ",".join(r.get("warnings", []))])
         else:
-            w.writerow(["student_ref", "diem_de_xuat", "diem_toi_da", *criteria_ids, "trang_thai", "flags", "warnings"])
+            w.writerow(["student_ref", "diem_de_xuat", "diem_toi_da", *criteria_ids, "test_dat", "test_truot",
+                        "trang_thai", "flags", "warnings"])
             for r in rows:
                 pts = {c["criterion_id"]: c.get("points") for c in r.get("criteria", [])}
+                t = (r.get("files") or {}).get("tests") or {}
                 w.writerow([r["student_ref"], r.get("suggested_total"), r.get("max_score"),
-                            *(pts.get(cid, "") for cid in criteria_ids), STATUS_LABEL.get(r["status"], r["status"]),
+                            *(pts.get(cid, "") for cid in criteria_ids), _n(t.get("passed")), _n(t.get("failed")),
+                            STATUS_LABEL.get(r["status"], r["status"]),
                             ",".join(r.get("flags", [])), ",".join(r.get("warnings", []))])
 
     json_path = out / "results.json"

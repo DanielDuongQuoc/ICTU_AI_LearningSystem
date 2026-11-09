@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -10,6 +11,7 @@ from typing import Any, Callable, Optional
 
 from agent.backends import GradingBackend
 from agent.config import AgentConfig
+from agent.sandbox import TestOutcome, run_tests
 from agent.scanner import Submission, scan
 from agent.selector import build_answer, select_files
 from app.core.exceptions import AppError, ErrorCode
@@ -116,6 +118,16 @@ async def run(
             rubric=assignment.rubric, answer=answer, expected_answer=assignment.expected_answer or None,
             submission_ref=ref, language=cfg.language, extra_flags=["truncated"] if truncated else [],
         )
+        tests: Optional[TestOutcome] = None
+        if cfg.tests_dir is not None:
+            tests = await asyncio.to_thread(run_tests, sub.root, cfg)
+            if tests.executed:
+                req.test_results = tests.summary[:10000]
+            else:
+                req.extra_flags.append("not_executed")
+            files_info["tests"] = {"executed": tests.executed, "passed": tests.passed, "failed": tests.failed,
+                                   "exit_code": tests.exit_code, "timed_out": tests.timed_out,
+                                   "reason": tests.reason}
         try:
             result = await backend.grade(req)
         except AppError as exc:
