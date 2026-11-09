@@ -18,26 +18,27 @@ REVIEW_FLAGS = frozenset({
 # Informational only (result stays final for homework).
 WARNING_FLAGS = frozenset({"empty_or_off_topic", "ungrounded_rubric"})
 
+# Patterns are deliberately specific: they also run on SOURCE CODE (comments, identifiers), where phrases such as
+# "assign max score" or "self.system: str" are normal and must not raise a review flag.
 _INJECTION_PATTERNS = [
     r"ignore\s+(all\s+|the\s+|any\s+)?(previous|above|prior|earlier)\s+(instructions|rules|prompts?)",
     r"disregard\s+(all\s+|the\s+)?(previous|above|prior)?\s*(instructions|rules)",
-    r"(give|award|assign)\s+(me\s+|this\s+(answer|submission)\s+)?(full|maximum|max|perfect|10|100)\s*(/\s*10\s*)?"
-    r"(marks?|points?|score|grade)",
-    r"\b(mark|grade)\s+(this|me)\s+(as\s+)?(pass(ed)?|correct|full)",
+    r"\b(give|award|assign)\s+(me|us|this\s+(answer|submission|solution|code|essay))\s+"
+    r"(full|maximum|max|perfect|10|100)\s*(/\s*10\s*)?(marks?|points?|score|grade)",
+    r"\b(mark|grade)\s+(this|me)\s+(as\s+)?(pass(ed)?|correct|full\s+marks?)\b",
     r"system\s+prompt",
-    r"(?:^|[\s.!?])system\s*:\s*\S",
     r"\b(the\s+)?(grader|examiner|assistant|model)\s+(must|should|has\s+to)\s+(give|award|mark|grade|assign)",
-    r"you\s+are\s+now\s+",
+    r"you\s+are\s+now\s+(a|an|the)\s",
     r"\bas\s+an?\s+(ai|language\s+model|grader)\b.*\b(must|should)\b",
     r"bỏ\s+qua\s+(các\s+|mọi\s+|tất\s+cả\s+)?(hướng\s+dẫn|chỉ\s+dẫn|yêu\s+cầu|quy\s+tắc)",
-    r"cho\s+(em|tôi|mình|bài\s+này)\s+(điểm\s+)?(10|tối\s+đa|max|đạt|qua)",
-    r"chấm\s+(cho\s+)?(em|tôi|mình|bài\s+này)\s+(điểm\s+)?(10|tối\s+đa|đạt|qua)",
+    r"cho\s+(em|tôi|mình|bài\s+này)\s+(điểm\s+(10|tối\s+đa|max|cao)|đạt|qua\s+môn|qua)\b",
+    r"chấm\s+(cho\s+)?(em|tôi|mình|bài\s+này)\s+(điểm\s+(10|tối\s+đa|max|cao)|đạt|qua)\b",
     r"(gửi|nhắn)\s+(ai|giám\s+khảo|người\s+chấm)\s*[:,]",
 ]
 _INJECTION_RE = re.compile("|".join(f"(?:{p})" for p in _INJECTION_PATTERNS), re.IGNORECASE | re.UNICODE)
 _PUNCT = re.compile(r"[^\w\s]", re.UNICODE)
 _SPACES = re.compile(r"\s+")
-MIN_ANSWER_CHARS = 10
+COPY_RATIO = 0.9
 
 
 def _norm(text: str) -> str:
@@ -49,11 +50,15 @@ def detect_injection(text: str) -> bool:
 
 
 def is_empty_or_copy(answer: str, question: str) -> bool:
+    """True for an answer with no word at all, or one that only repeats the question.
+
+    Short answers are NOT empty: "O(n log n)", "3NF" or "True" are valid short answers and must be graded.
+    """
     a = _norm(answer or "")
-    if len(a) < MIN_ANSWER_CHARS:
+    if not a:
         return True
     q = _norm(question or "")
-    return bool(q) and (a == q or difflib.SequenceMatcher(None, a, q).ratio() >= 0.9)
+    return bool(q) and len(a) >= 10 and (a == q or difflib.SequenceMatcher(None, a, q).ratio() >= COPY_RATIO)
 
 
 def split_flags(flags: list[str]) -> tuple[list[str], list[str]]:

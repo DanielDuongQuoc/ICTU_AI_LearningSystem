@@ -255,11 +255,12 @@ def test_injection_patterns(text):
 def test_injection_detector_ignores_normal_answers():
     assert not detect_injection(ANSWER)
     assert not detect_injection("Hàm này trả về điểm trung bình của sinh viên.")
+    assert not detect_injection("self.system: str = 'linux'\n# assign max score to variable")
 
 
 def test_empty_or_copy():
-    assert is_empty_or_copy("ok", QUESTION) and is_empty_or_copy(QUESTION + ".", QUESTION)
-    assert not is_empty_or_copy(ANSWER, QUESTION)
+    assert is_empty_or_copy("   ", QUESTION) and is_empty_or_copy(QUESTION + ".", QUESTION)
+    assert not is_empty_or_copy("3NF", QUESTION) and not is_empty_or_copy(ANSWER, QUESTION)
 
 
 # ============================================================ rubric generation
