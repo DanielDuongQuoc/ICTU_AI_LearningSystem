@@ -4,6 +4,8 @@ from urllib.parse import urlparse
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.key_pool import parse_api_keys
+
 
 class Settings(BaseSettings):
     """Application-wide settings loaded from environment / .env."""
@@ -111,6 +113,11 @@ class Settings(BaseSettings):
 
     # CORS: comma-separated origins. Empty (default) = CORS disabled (server-to-server use).
     cors_allowed_origins: str = Field("")
+
+    @property
+    def gemini_api_keys(self) -> list[str]:
+        """All configured Gemini API keys (comma/semicolon/whitespace-separated in GEMINI_API_KEY)."""
+        return parse_api_keys(self.gemini_api_key)
 
     @property
     def cors_origins(self) -> list[str]:

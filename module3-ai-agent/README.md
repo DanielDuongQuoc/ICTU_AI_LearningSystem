@@ -55,7 +55,7 @@ Loaded from the environment / `.env` (`app/core/config.py`). Invalid values stop
 |---|---|---|
 | `APP_ENV` | `development` | `development` / `staging` / `production` / `test` |
 | `APP_HOST` / `APP_PORT` | `0.0.0.0` / `8003` | Docker uses `$PORT` when the platform sets it (Render) |
-| `GEMINI_API_KEY` | (empty) | **Secret.** Only via `.env` / platform secret store |
+| `GEMINI_API_KEY` | (empty) | **Secret.** Single key or comma-separated keys (`key1,key2,key3`) for round-robin + 429 failover |
 | `GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta` | |
 | `GEMINI_MODEL` | `gemini-3.5-flash-lite` | generation model |
 | `GEMINI_EMBEDDING_MODEL` | `gemini-embedding-001` | changing it requires re-indexing documents |
@@ -99,9 +99,14 @@ documents must be re-uploaded (attach a persistent disk at `/app/data/chroma` on
 
 ## 5. Gemini quota notes
 
-- Free-tier keys have low per-minute and per-day limits. A `429` from Gemini is retried once
-  (`LLM_MAX_RETRIES`) after `LLM_RETRY_BACKOFF_S`; if it persists the API returns `502`
-  `OLLAMA_GENERATION_ERROR` (legacy code name, see the contract).
+- **Multi-key rotation & failover:** `GEMINI_API_KEY` accepts one key or multiple comma-separated keys
+  (`GEMINI_API_KEY=key1,key2,key3`). Healthy keys are rotated round-robin across LLM and embedding calls;
+  if a key hits `429` (quota / rate limit) or `5xx`, it is placed in a 60s cooldown and the request
+  immediately fails over to the next healthy key in the pool.
+- Free-tier keys have low per-minute and per-day limits (note: Google AI Studio enforces free-tier quota
+  per Google Cloud **Project**, so create each key in a separate Google Cloud Project to multiply quota).
+  A `429` from a single key is retried (`LLM_MAX_RETRIES`) after `LLM_RETRY_BACKOFF_S`; if all keys fail,
+  the API returns `502` `OLLAMA_GENERATION_ERROR` (legacy code name, see the contract).
 - Each upload makes `ceil(chunks / EMBEDDING_BATCH_SIZE)` embedding calls; each RAG answer, question
   generation or evaluation makes 1 embedding call + 1 generation call (+1 if the model returns invalid JSON).
   A matrix request makes one generation call per row.

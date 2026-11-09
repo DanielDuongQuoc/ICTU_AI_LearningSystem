@@ -811,3 +811,61 @@ async def test_api_key_and_prompts_never_logged(caplog):
         assert canary not in caplog.text, canary
     await svc.close()
 
+
+# ============================================================================ multi-key rotation & failover
+
+async def test_multi_key_round_robin_across_generate_and_embeddings():
+    rec = Recorder(gemini_ok("1"), gemini_ok("2"), gemini_ok("3"), gemini_ok("4"))
+    svc = gemini_llm(rec, api_key="key-a, key-b; key-c, key-a")  # duplicate key-a is deduplicated
+    for expected in ("1", "2", "3", "4"):
+        assert await svc.generate("s", "u") == expected
+    used_keys = [r.headers["x-goog-api-key"] for r in rec.requests]
+    assert used_keys == ["key-a", "key-b", "key-c", "key-a"]
+    await svc.close()
+
+    emb_rec = Recorder(httpx.Response(200, json=gemini_embeddings_body([[1.0]])))
+    emb = gemini_embedding(emb_rec, api_key="emb-1,emb-2")
+    await emb.embed_text("x")
+    await emb.embed_text("y")
+    await emb.embed_text("z")
+    assert [r.headers["x-goog-api-key"] for r in emb_rec.requests] == ["emb-1", "emb-2", "emb-1"]
+    await emb.close()
+
+
+async def test_multi_key_failover_on_429_skips_cooled_down_key_in_subsequent_calls():
+    def handler(request: httpx.Request) -> httpx.Response:
+        key = request.headers["x-goog-api-key"]
+        if key == "key-exhausted":
+            return httpx.Response(429, json={"error": {"status": "RESOURCE_EXHAUSTED"}})
+        return gemini_ok(f"ok-from-{key}")
+
+    svc = gemini_llm(handler, api_key="key-exhausted,key-healthy-1,key-healthy-2", backoff=5.0)
+    svc._max_retries = 0
+    # Call 1: hits key-exhausted (429), immediately fails over to key-healthy-1 without waiting backoff
+    started = time.perf_counter()
+    assert await svc.generate("s", "u") == "ok-from-key-healthy-1"
+    assert time.perf_counter() - started < 1.0
+    # Call 2 & Call 3: key-exhausted is in 60s cooldown, so round-robin rotates only healthy keys
+    assert await svc.generate("s", "u") == "ok-from-key-healthy-2"
+    assert await svc.generate("s", "u") == "ok-from-key-healthy-1"
+    await svc.close()
+
+
+async def test_multi_key_stream_and_health_failover_on_429():
+    rec = Recorder(
+        httpx.Response(429, text="quota exceeded"),
+        httpx.Response(200, content=gemini_sse("stream", "-ok")),
+    )
+    svc = gemini_llm(rec, api_key="k1,k2")
+    svc._max_retries = 0
+    assert [p async for p in svc.generate_stream("s", "u")] == ["stream", "-ok"]
+    assert [r.headers["x-goog-api-key"] for r in rec.requests] == ["k1", "k2"]
+    await svc.close()
+
+    health_rec = Recorder(httpx.Response(429), httpx.Response(200, json={"name": "models/gemini-test"}))
+    svc2 = gemini_llm(health_rec, api_key="k1,k2")
+    assert await svc2.check_health() == {"status": "ok", "model": "gemini-test"}
+    assert [r.headers["x-goog-api-key"] for r in health_rec.requests] == ["k1", "k2"]
+    await svc2.close()
+
+

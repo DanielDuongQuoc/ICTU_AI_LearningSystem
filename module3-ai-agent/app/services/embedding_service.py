@@ -21,6 +21,7 @@ import httpx
 from app.core.concurrency import embedding_gate
 from app.core.config import get_settings
 from app.core.exceptions import AppError, ErrorCode
+from app.core.key_pool import GeminiKeyPool
 from app.core.metrics import metrics
 from app.core.timeouts import call_timeout, can_retry
 
@@ -42,7 +43,9 @@ class GeminiEmbeddingService:
         timeout: Optional[float] = None,
     ) -> None:
         settings = get_settings()
-        self._api_key: str = (api_key if api_key is not None else settings.gemini_api_key).strip()
+        raw_key = api_key if api_key is not None else settings.gemini_api_key
+        self._key_pool = GeminiKeyPool(raw_key)
+        self._api_key: str = self._key_pool.keys[0] if self._key_pool else ""
         self._base_url: str = (base_url or settings.gemini_base_url).rstrip("/")
         self._model: str = model or settings.gemini_embedding_model
         self._timeout: float = timeout or settings.llm_timeout
@@ -120,17 +123,21 @@ class GeminiEmbeddingService:
     # ── Internal ────────────────────────────────────────────────────
 
     async def _post_with_retry(self, endpoint: str, payload: dict[str, Any]) -> httpx.Response:
-        """POST with ONE retry for transient causes only, always within the request budget."""
+        """POST with retry / multi-key failover for transient causes only, always within the request budget."""
         settings = get_settings()
-        max_retries = max(0, settings.llm_max_retries)
+        base_retries = max(0, settings.llm_max_retries)
+        max_retries = max(base_retries, self._key_pool.size - 1)
         backoff = max(0.0, settings.llm_retry_backoff_s)
         client = await self._get_client()
         retry_count = 0
+        tried_keys: set[str] = set()
         while True:
             timeout = call_timeout(self._timeout, settings.llm_connect_timeout, code=ErrorCode.EMBEDDING_TIMEOUT)
-            kwargs = {} if timeout is None else {"timeout": timeout}
+            kwargs: dict[str, Any] = {} if timeout is None else {"timeout": timeout}
+            key = self._key_pool.next_key(exclude=tried_keys)
+            tried_keys.add(key)
             try:
-                response = await client.post(endpoint, json=payload, **kwargs)
+                response = await client.post(endpoint, json=payload, headers={"x-goog-api-key": key}, **kwargs)
             except httpx.ConnectError as exc:
                 logger.error("Gemini embedding service unreachable: %s", exc)
                 raise AppError(ErrorCode.EMBEDDING_SERVICE_UNAVAILABLE,
@@ -139,7 +146,7 @@ class GeminiEmbeddingService:
                 logger.error("Gemini embedding request timed out: %s", exc)
                 raise AppError(ErrorCode.EMBEDDING_TIMEOUT, "Embedding request timed out.") from exc
             except (httpx.RemoteProtocolError, httpx.ReadError, httpx.WriteError) as exc:
-                if retry_count < max_retries and can_retry(backoff, 5.0):
+                if retry_count < base_retries and can_retry(backoff, 5.0):
                     retry_count += 1
                     metrics.event("embedding_retry", "connection_reset")
                     logger.warning("Gemini embedding connection reset - retrying retry_count=%d", retry_count)
@@ -152,18 +159,24 @@ class GeminiEmbeddingService:
                 logger.error("Gemini embedding HTTP error: %s", exc)
                 raise AppError(ErrorCode.EMBEDDING_SERVICE_UNAVAILABLE,
                                "Embedding service returned an HTTP error.") from exc
-            if response.status_code in RETRYABLE_STATUS and retry_count < max_retries and can_retry(backoff, 5.0):
+            self._key_pool.report_status(key, response.status_code)
+            has_untried_key = self._key_pool.size > 1 and len(tried_keys) < self._key_pool.size
+            wait_s = 0.0 if has_untried_key else backoff
+            if response.status_code in RETRYABLE_STATUS and retry_count < max_retries and can_retry(wait_s, 5.0):
                 retry_count += 1
                 metrics.event("embedding_retry", "transient")
-                logger.warning("Gemini embedding transient status=%d - retrying retry_count=%d",
-                               response.status_code, retry_count)
-                await asyncio.sleep(backoff)
+                logger.warning(
+                    "Gemini embedding transient status=%d - retrying retry_count=%d key_slot=%s",
+                    response.status_code, retry_count, self._key_pool.key_slot(key),
+                )
+                if wait_s > 0:
+                    await asyncio.sleep(wait_s)
                 continue
             return response
 
     async def _call_api(self, texts: list[str]) -> list[list[float]]:
         """Send one ``batchEmbedContents`` request and validate the returned vectors."""
-        if not self._api_key:
+        if not self._key_pool:
             raise AppError(ErrorCode.EMBEDDING_SERVICE_UNAVAILABLE, "Gemini API key is not configured.")
         model_id = self._model.removeprefix("models/")
         payload = {

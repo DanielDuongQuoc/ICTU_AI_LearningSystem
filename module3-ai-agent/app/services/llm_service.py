@@ -26,6 +26,7 @@ from app.core import runtime_config
 from app.core.concurrency import llm_gate
 from app.core.config import get_settings
 from app.core.exceptions import AppError, ErrorCode
+from app.core.key_pool import GeminiKeyPool
 from app.core.metrics import metrics
 from app.core.output_guard import enforce_output_size
 from app.core.prompts import JSON_RETRY_PROMPT
@@ -130,7 +131,9 @@ class GeminiLLMService(LLMService):
         max_output_tokens: Optional[int] = None,
     ) -> None:
         s = get_settings()
-        self._api_key = (api_key if api_key is not None else s.gemini_api_key).strip()
+        raw_key = api_key if api_key is not None else s.gemini_api_key
+        self._key_pool = GeminiKeyPool(raw_key)
+        self._api_key = self._key_pool.keys[0] if self._key_pool else ""
         self._base_url = (base_url or s.gemini_base_url).rstrip("/")
         self._model_explicit = model
         self._timeout = timeout or s.llm_timeout
@@ -184,20 +187,30 @@ class GeminiLLMService(LLMService):
     # ── Health ──────────────────────────────────────────────────────
 
     async def check_health(self) -> dict[str, Any]:
-        if not self._api_key:
+        if not self._key_pool:
             raise AppError(ErrorCode.LLM_UNAVAILABLE, _KEY_MISSING)
         client = await self._get_client()
-        try:
-            resp = await client.get(f"/models/{self._model_id}", timeout=get_settings().llm_health_timeout)
-        except httpx.TimeoutException as exc:
-            raise AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API did not respond.") from exc
-        except httpx.HTTPError as exc:
-            raise AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API is not reachable.") from exc
-        if resp.status_code == 404:
-            raise AppError(ErrorCode.LLM_MODEL_NOT_FOUND, f"Model '{self._model}' is not available in Gemini API.")
-        if resp.status_code != 200:
-            raise AppError(ErrorCode.LLM_UNAVAILABLE, f"Gemini API returned HTTP {resp.status_code}.")
-        return {"status": "ok", "model": self._model}
+        last_status = 0
+        for key in self._key_pool.keys:
+            try:
+                resp = await client.get(
+                    f"/models/{self._model_id}",
+                    headers={"x-goog-api-key": key},
+                    timeout=get_settings().llm_health_timeout,
+                )
+            except httpx.TimeoutException as exc:
+                raise AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API did not respond.") from exc
+            except httpx.HTTPError as exc:
+                raise AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API is not reachable.") from exc
+            self._key_pool.report_status(key, resp.status_code)
+            if resp.status_code == 200:
+                return {"status": "ok", "model": self._model}
+            if resp.status_code == 404:
+                raise AppError(ErrorCode.LLM_MODEL_NOT_FOUND, f"Model '{self._model}' is not available in Gemini API.")
+            last_status = resp.status_code
+            if resp.status_code not in RETRYABLE_STATUS:
+                break
+        raise AppError(ErrorCode.LLM_UNAVAILABLE, f"Gemini API returned HTTP {last_status}.")
 
     # ── Generation ──────────────────────────────────────────────────
 
@@ -336,7 +349,7 @@ class GeminiLLMService(LLMService):
         Raw provider objects never leave this method. The httpx read timeout applies to every read, so a
         stalled stream raises LLM_TIMEOUT instead of hanging. Retries only happen before any byte was read.
         """
-        if not self._api_key:
+        if not self._key_pool:
             raise AppError(ErrorCode.LLM_UNAVAILABLE, _KEY_MISSING)
         payload = self._build_payload(
             system_prompt, user_prompt, json_mode=json_mode, temperature=temperature, max_tokens=max_tokens,
@@ -348,17 +361,24 @@ class GeminiLLMService(LLMService):
         pieces = 0
         has_text = False
         retry_count = 0
+        tried_keys: set[str] = set()
+        max_retries = max(self._max_retries, self._key_pool.size - 1)
         try:
             while True:
                 retry = False
-                async with client.stream("POST", endpoint, json=payload) as resp:
+                key = self._key_pool.next_key(exclude=tried_keys)
+                tried_keys.add(key)
+                async with client.stream("POST", endpoint, json=payload, headers={"x-goog-api-key": key}) as resp:
+                    self._key_pool.report_status(key, resp.status_code)
                     if resp.status_code == 404:
                         raise AppError(
                             ErrorCode.LLM_MODEL_NOT_FOUND, f"Model '{self._model}' is not available in Gemini API.",
                         )
                     if resp.status_code != 200:
-                        logger.error("Gemini stream status=%d", resp.status_code)
-                        if resp.status_code in RETRYABLE_STATUS and retry_count < self._max_retries:
+                        logger.error(
+                            "Gemini stream status=%d key_slot=%s", resp.status_code, self._key_pool.key_slot(key),
+                        )
+                        if resp.status_code in RETRYABLE_STATUS and retry_count < max_retries:
                             retry = True
                         else:
                             raise AppError(
@@ -382,10 +402,13 @@ class GeminiLLMService(LLMService):
                 if not retry:
                     break
                 retry_count += 1
+                has_untried_key = self._key_pool.size > 1 and len(tried_keys) < self._key_pool.size
                 logger.warning(
-                    "Gemini stream transient failure - retrying retry_count=%d model=%s", retry_count, self._model,
+                    "Gemini stream transient failure - retrying retry_count=%d model=%s key_slot=%s",
+                    retry_count, self._model, self._key_pool.key_slot(key),
                 )
-                await asyncio.sleep(self._retry_backoff_s)
+                if not has_untried_key:
+                    await asyncio.sleep(self._retry_backoff_s)
         except httpx.ConnectError as exc:
             logger.error("Gemini unreachable: %s", exc)
             raise AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API is not reachable.") from exc
@@ -442,7 +465,7 @@ class GeminiLLMService(LLMService):
         temperature: Optional[float],
         max_tokens: Optional[int],
     ) -> str:
-        if not self._api_key:
+        if not self._key_pool:
             raise AppError(ErrorCode.LLM_UNAVAILABLE, _KEY_MISSING)
         payload = self._build_payload(
             system_prompt, user_prompt, json_mode=json_mode, temperature=temperature, max_tokens=max_tokens,
@@ -451,11 +474,15 @@ class GeminiLLMService(LLMService):
         client = await self._get_client()
         started = time.perf_counter()
         retry_count = 0
+        tried_keys: set[str] = set()
+        max_retries = max(self._max_retries, self._key_pool.size - 1)
         while True:
             timeout = call_timeout(self._timeout, get_settings().llm_connect_timeout)
-            kwargs = {} if timeout is None else {"timeout": timeout}
+            kwargs: dict[str, Any] = {} if timeout is None else {"timeout": timeout}
+            key = self._key_pool.next_key(exclude=tried_keys)
+            tried_keys.add(key)
             try:
-                resp = await client.post(endpoint, json=payload, **kwargs)
+                resp = await client.post(endpoint, json=payload, headers={"x-goog-api-key": key}, **kwargs)
             except httpx.ConnectError as exc:
                 logger.error("Gemini unreachable: %s", exc)
                 raise AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API is not reachable.") from exc
@@ -476,15 +503,19 @@ class GeminiLLMService(LLMService):
                 logger.error("Gemini HTTP error: %s", exc)
                 raise AppError(ErrorCode.LLM_UNAVAILABLE, "Gemini API returned an HTTP error.") from exc
 
-            if (resp.status_code in RETRYABLE_STATUS and retry_count < self._max_retries
-                    and can_retry(self._retry_backoff_s, 5.0)):
+            self._key_pool.report_status(key, resp.status_code)
+            has_untried_key = self._key_pool.size > 1 and len(tried_keys) < self._key_pool.size
+            backoff = 0.0 if has_untried_key else self._retry_backoff_s
+            if (resp.status_code in RETRYABLE_STATUS and retry_count < max_retries
+                    and can_retry(backoff, 5.0)):
                 retry_count += 1
                 metrics.event("llm_retry", "transient")
                 logger.warning(
-                    "Gemini transient failure status=%d - retrying retry_count=%d model=%s",
-                    resp.status_code, retry_count, self._model,
+                    "Gemini transient failure status=%d - retrying retry_count=%d model=%s key_slot=%s",
+                    resp.status_code, retry_count, self._model, self._key_pool.key_slot(key),
                 )
-                await asyncio.sleep(self._retry_backoff_s)
+                if backoff > 0:
+                    await asyncio.sleep(backoff)
                 continue
             break
 
