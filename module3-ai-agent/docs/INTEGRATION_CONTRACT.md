@@ -33,6 +33,7 @@ backward compatibility (see [Legacy names](#legacy-names)).
 | `POST /api/rubrics/validate` | Check a rubric against the code rules (no AI call) | `RubricValidationResponse` |
 | `POST /api/grading/grade` | Grade one submission with an approved rubric (homework PASS/FAIL, in-class points) | `GradeResult` |
 | `POST /api/grading/batch` | Grade several submissions of one question | `GradeBatchResponse` |
+| `POST /api/submissions/handwritten/transcribe` | Multipart page images (JPG/PNG/PDF) → transcript + review flags | `TranscriptionResponse` |
 | `GET /metrics` | Prometheus text metrics (internal, not in OpenAPI) | text |
 | `GET /docs`, `GET /openapi.json` | API documentation | |
 
@@ -183,6 +184,13 @@ only picks one level label per criterion. Review flags: `injection_suspected`, `
 "submissions": [{"submission_ref", "answer", "submission_kind"?}]}` (max `MAX_BATCH_SUBMISSIONS`) →
 `{"total", "succeeded", "failed", "results": [{"submission_ref", "ok", "result"?, "error"?}]}`.
 
+Handwritten answers: `POST /api/submissions/handwritten/transcribe` (multipart: `files` = page images in order,
+`question`?, `language`?, `mask_header_ratio`? default 0.12 — the top of page 1 is blanked before the model sees it).
+Response `{"pages": [{"page", "text", "confidence", "unreadable_count", "diagram_present"}], "text", "flags", "trace"}`.
+`[?]` marks unreadable words. Let the lecturer correct `text` if needed, then call `/api/grading/grade` with
+`submission_kind: "handwritten_transcript"`, `answer: text` and `extra_flags: flags` (homework with `unreadable` or
+`diagram_present` becomes `needs_review`). Limits: `MAX_HANDWRITTEN_PAGES`, `MAX_UPLOAD_SIZE_MB` in total.
+
 ## Health
 
 ```json
@@ -252,6 +260,7 @@ Validation failures are 422 `VALIDATION_ERROR`; rate limit 429 `RATE_LIMITED` wi
 | 502 | `OLLAMA_INVALID_RESPONSE` | Gemini returned a malformed response |
 | 502 | `QUESTION_GENERATION_INVALID_RESPONSE` | Model produced no valid questions |
 | 502 | `RUBRIC_GENERATION_ERROR` | Rubric generation failed upstream |
+| 502 | `TRANSCRIPTION_INVALID_RESPONSE` | Model transcription of handwritten pages unusable after one retry |
 | 503 | `CHROMA_ERROR` | Vector store operation failed / unavailable |
 | 503 | `EMBEDDING_MODEL_NOT_FOUND` | GEMINI_EMBEDDING_MODEL does not exist |
 | 503 | `EMBEDDING_SERVICE_UNAVAILABLE` | Gemini embedding endpoint unreachable or API key missing |

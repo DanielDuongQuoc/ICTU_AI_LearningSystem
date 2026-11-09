@@ -31,6 +31,7 @@ CONTRACT = {
     ("post", "/api/evaluations/evaluate"), ("post", "/api/evaluations/evaluate/stream"),
     ("post", "/api/rubrics/generate"), ("post", "/api/rubrics/validate"),
     ("post", "/api/grading/grade"), ("post", "/api/grading/batch"),
+    ("post", "/api/submissions/handwritten/transcribe"),
 }
 
 

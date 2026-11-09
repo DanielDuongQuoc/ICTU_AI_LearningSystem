@@ -21,6 +21,7 @@ from app.api.evaluations import router as evaluations_router
 from app.api.grading import router as grading_router
 from app.api.rag import router as rag_router
 from app.api.rubrics import router as rubrics_router
+from app.api.submissions import router as submissions_router
 
 
 async def _close_shared_clients(logger: logging.Logger) -> None:
@@ -119,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(evaluations_router)
     app.include_router(rubrics_router)
     app.include_router(grading_router)
+    app.include_router(submissions_router)
     register_exception_handlers(app)
     install_openapi(app)
     return app

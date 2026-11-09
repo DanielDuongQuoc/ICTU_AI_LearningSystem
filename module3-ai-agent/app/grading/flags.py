@@ -13,6 +13,7 @@ REVIEW_FLAGS = frozenset({
     "truncated",             # Agent: submission cut to fit the size limit, the model did not see everything
     "not_executed",          # Agent: a required test criterion could not be run
     "grading_error",         # system failure while grading
+    "diagram_present",       # handwritten: a drawing/diagram the lecturer must grade by hand
 })
 # Informational only (result stays final for homework).
 WARNING_FLAGS = frozenset({"empty_or_off_topic", "ungrounded_rubric"})

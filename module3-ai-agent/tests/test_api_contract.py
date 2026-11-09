@@ -849,7 +849,8 @@ def test_openapi_contains_exactly_the_documented_contract_endpoints():
              ("post", "/api/questions/generate-matrix"),  # reviewed additive endpoint (exam matrix, docs/INTEGRATION_CONTRACT.md)
              # reviewed additive endpoints: rubric generation/validation and rubric-based grading
              ("post", "/api/rubrics/generate"), ("post", "/api/rubrics/validate"),
-             ("post", "/api/grading/grade"), ("post", "/api/grading/batch")}
+             ("post", "/api/grading/grade"), ("post", "/api/grading/batch"),
+             ("post", "/api/submissions/handwritten/transcribe")}
     assert all((m, p) in known for m, p in extra), f"undocumented API surface: {extra}"
 
 

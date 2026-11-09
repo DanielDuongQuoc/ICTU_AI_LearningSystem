@@ -34,6 +34,8 @@ Send = Callable[[Message], Awaitable[None]]
 
 
 UPLOAD_PATH = "/api/documents/upload"
+# Multipart routes bounded by MAX_UPLOAD_SIZE_MB in their handlers instead of MAX_REQUEST_BODY_BYTES.
+UPLOAD_PATHS = (UPLOAD_PATH, "/api/submissions/handwritten/transcribe")
 DOC_PATHS = ("/docs", "/redoc", "/openapi.json")
 _SECURITY_HEADERS: list[tuple[bytes, bytes]] = [
     (b"x-content-type-options", b"nosniff"),
@@ -86,7 +88,7 @@ class RequestContextMiddleware:
 
         async def limited_receive() -> Message:
             message = await receive()
-            if message.get("type") == "http.request" and path != UPLOAD_PATH:
+            if message.get("type") == "http.request" and path not in UPLOAD_PATHS:
                 seen["bytes"] += len(message.get("body", b""))
                 if seen["bytes"] > body_limit:
                     # HTTPException passes through FastAPI's body parsing (a bare AppError would become 400).
@@ -143,7 +145,7 @@ class RequestContextMiddleware:
         metrics.request_started()
         logger.info("[request] started request_id=%s method=%s path=%s", request_id, method, path)
         try:
-            if path != UPLOAD_PATH and declared.isdigit() and int(declared) > body_limit:
+            if path not in UPLOAD_PATHS and declared.isdigit() and int(declared) > body_limit:
                 # Declared size already over the cap: answer without reading (or routing) the body.
                 payload = json.dumps({"error": {"code": ErrorCode.REQUEST_TOO_LARGE,
                                                 "message": f"Request body exceeds {body_limit} bytes.",
