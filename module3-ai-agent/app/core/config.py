@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     max_submission_chars: int = Field(60000)
     # Max submissions in one /api/grading/batch request.
     max_batch_submissions: int = Field(20)
+    # Output-token budgets: a full rubric (criteria x levels, Vietnamese) or a per-criterion grading result is
+    # much longer than a short answer, so these calls get their own limits instead of LLM_MAX_OUTPUT_TOKENS.
+    rubric_max_output_tokens: int = Field(4096)
+    grading_max_output_tokens: int = Field(2048)
 
     # Observability
     slow_request_threshold_ms: int = Field(5000)
@@ -249,6 +253,8 @@ class Settings(BaseSettings):
             errors.append("MAX_SUBMISSION_CHARS must be > 0")
         if self.max_batch_submissions <= 0:
             errors.append("MAX_BATCH_SUBMISSIONS must be > 0")
+        if self.rubric_max_output_tokens <= 0 or self.grading_max_output_tokens <= 0:
+            errors.append("RUBRIC_MAX_OUTPUT_TOKENS and GRADING_MAX_OUTPUT_TOKENS must be > 0")
         if self.log_level.strip() and self.log_level.strip().upper() not in {
             "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
         }:

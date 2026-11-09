@@ -49,7 +49,7 @@ class RubricService:
             self._rag = get_rag_service()
         return self._rag
 
-    # ── public ──────────────────────────────────────────────────────
+    # â”€â”€ public â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async def generate(self, req: RubricGenerateRequest, request_id: Optional[str] = None) -> RubricGenerateResponse:
         request_id = request_id or str(uuid.uuid4())
@@ -76,7 +76,8 @@ class RubricService:
                 max_score=req.max_score, assessment_context=req.assessment_context, context=context,
                 course_data=course_data, language=req.language, violations=violations or None,
             )
-            raw = await self._llm.generate_json(system_prompt, user_prompt, required_keys=["criteria"])
+            raw = await self._llm.generate_json(system_prompt, user_prompt, required_keys=["criteria"],
+                                               max_tokens=get_settings().rubric_max_output_tokens)
             candidate, problems = self._build_rubric(raw, req, grounded, chunks)
             if candidate is not None and not problems:
                 rubric = candidate
@@ -100,7 +101,7 @@ class RubricService:
             model=self._llm.model_name, prompt_version=f"{prompt_registry.TASK_RUBRIC_GENERATION}:{version}",
         )
 
-    # ── internals ───────────────────────────────────────────────────
+    # â”€â”€ internals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @staticmethod
     def _build_rubric(
@@ -145,7 +146,8 @@ class RubricService:
             system_prompt, user_prompt = prompt_registry.build(
                 prompt_registry.TASK_RUBRIC_REVIEW, version, question=req.question.strip(),
                 expected_answer=req.expected_answer.strip(), rubric_json=rubric_json, language=req.language)
-            raw = await self._llm.generate_json(system_prompt, user_prompt, required_keys=["issues", "criteria"])
+            raw = await self._llm.generate_json(system_prompt, user_prompt, required_keys=["issues", "criteria"],
+                                               max_tokens=get_settings().rubric_max_output_tokens)
         except AppError as exc:
             logger.warning("Rubric review skipped | request_id=%s code=%s", request_id, exc.code)
             return rubric, False, []

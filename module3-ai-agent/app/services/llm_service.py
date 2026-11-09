@@ -13,6 +13,7 @@ Error codes keep their historical ``OLLAMA_*`` string values (see ``ErrorCode.LL
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import time
@@ -234,12 +235,13 @@ class GeminiLLMService(LLMService):
         required_keys: Optional[list[str]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        images: Optional[list[tuple[str, bytes]]] = None,
     ) -> Any:
         """Ask for JSON; on invalid output retry exactly once, then LLM_INVALID_JSON."""
         prompt = user_prompt
         for attempt in (1, 2):
             raw = await self._chat(
-                system_prompt, prompt, json_mode=True, temperature=temperature, max_tokens=max_tokens,
+                system_prompt, prompt, json_mode=True, temperature=temperature, max_tokens=max_tokens, images=images,
             )
             enforce_output_size(raw)  # oversized output is rejected, not parsed
             parse_started = time.perf_counter()
@@ -266,6 +268,7 @@ class GeminiLLMService(LLMService):
         json_mode: bool,
         temperature: Optional[float],
         max_tokens: Optional[int],
+        images: Optional[list[tuple[str, bytes]]] = None,
     ) -> dict[str, Any]:
         gen_cfg: dict[str, Any] = {
             "temperature": self._temperature if temperature is None else temperature,
@@ -274,7 +277,10 @@ class GeminiLLMService(LLMService):
         if json_mode:
             gen_cfg["responseMimeType"] = "application/json"
         payload: dict[str, Any] = {
-            "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+            "contents": [{"role": "user", "parts": [{"text": user_prompt}, *(
+                {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode("ascii")}}
+                for mime, data in (images or [])
+            )]}],
             "generationConfig": gen_cfg,
         }
         if system_prompt:
@@ -434,6 +440,7 @@ class GeminiLLMService(LLMService):
         json_mode: bool,
         temperature: Optional[float],
         max_tokens: Optional[int],
+        images: Optional[list[tuple[str, bytes]]] = None,
     ) -> str:
         """Gated, timed wrapper around :meth:`_chat_unlocked`."""
         outcome: Optional[str] = None
@@ -443,7 +450,7 @@ class GeminiLLMService(LLMService):
                 try:
                     result = await self._chat_unlocked(
                         system_prompt, user_prompt, json_mode=json_mode,
-                        temperature=temperature, max_tokens=max_tokens,
+                        temperature=temperature, max_tokens=max_tokens, images=images,
                     )
                     outcome = "ok"
                     return result
@@ -464,11 +471,12 @@ class GeminiLLMService(LLMService):
         json_mode: bool,
         temperature: Optional[float],
         max_tokens: Optional[int],
+        images: Optional[list[tuple[str, bytes]]] = None,
     ) -> str:
         if not self._key_pool:
             raise AppError(ErrorCode.LLM_UNAVAILABLE, _KEY_MISSING)
         payload = self._build_payload(
-            system_prompt, user_prompt, json_mode=json_mode, temperature=temperature, max_tokens=max_tokens,
+            system_prompt, user_prompt, json_mode=json_mode, temperature=temperature, max_tokens=max_tokens, images=images,
         )
         endpoint = f"/models/{self._model_id}:generateContent"
         client = await self._get_client()

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from app.core import prompt_registry, runtime_config
+from app.core.config import get_settings
 from app.core.exceptions import AppError, ErrorCode
 from app.core.output_guard import MAX_FEEDBACK_CHARS, clamp_text, enforce_no_prompt_leak
 from app.schemas.rubric import Rubric, RubricCriterion, RubricLevel
@@ -123,7 +124,8 @@ class RubricGrader:
         )
         last: Optional[AppError] = None
         for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
-            raw = await self._llm.generate_json(system_prompt, user_prompt, required_keys=REQUIRED_KEYS)
+            raw = await self._llm.generate_json(system_prompt, user_prompt, required_keys=REQUIRED_KEYS,
+                                                 max_tokens=get_settings().grading_max_output_tokens)
             try:
                 judgement = parse_judgement(raw, rubric)
                 judgement.prompt_version = f"{prompt_registry.TASK_RUBRIC_GRADING}:{version}"
