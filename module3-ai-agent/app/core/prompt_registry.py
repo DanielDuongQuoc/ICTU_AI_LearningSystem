@@ -27,8 +27,9 @@ TASK_ANSWER_EVALUATION = "answer_evaluation"
 TASK_RUBRIC_GENERATION = "rubric_generation"
 TASK_RUBRIC_REVIEW = "rubric_review"
 TASK_RUBRIC_GRADING = "rubric_grading"
+TASK_QUESTION_GENERATION_NO_DOC = "question_generation_nodoc"
 TASKS = (TASK_RAG_ANSWER, TASK_QUESTION_GENERATION, TASK_ANSWER_EVALUATION,
-         TASK_RUBRIC_GENERATION, TASK_RUBRIC_REVIEW, TASK_RUBRIC_GRADING)
+         TASK_RUBRIC_GENERATION, TASK_RUBRIC_REVIEW, TASK_RUBRIC_GRADING, TASK_QUESTION_GENERATION_NO_DOC)
 
 DEFAULT_PROMPT_VERSIONS: dict[str, str] = {
     TASK_RAG_ANSWER: P.PROMPT_VERSION,
@@ -37,6 +38,7 @@ DEFAULT_PROMPT_VERSIONS: dict[str, str] = {
     TASK_RUBRIC_GENERATION: P.RUBRIC_GENERATION_PROMPT_VERSION,
     TASK_RUBRIC_REVIEW: P.RUBRIC_REVIEW_PROMPT_VERSION,
     TASK_RUBRIC_GRADING: P.RUBRIC_GRADING_PROMPT_VERSION,
+    TASK_QUESTION_GENERATION_NO_DOC: P.QUESTION_GENERATION_NO_DOC_PROMPT_VERSION,
 }
 
 # Committed fingerprints of the shipped prompts. Changing prompt text requires a NEW version
@@ -48,6 +50,7 @@ PROMPT_LOCK: dict[tuple[str, str], str] = {
     (TASK_RUBRIC_GENERATION, "v1"): "69aa16ed6580a0fe94bb94c308ecec2cbe4270a623054f1708085871d4629c30",
     (TASK_RUBRIC_REVIEW, "v1"): "90e2eb93e224702646384a69dc1568be07a5b81de9d4df10e2a85be86b1136ad",
     (TASK_RUBRIC_GRADING, "v1"): "36b407e4abe1c215dd361366c975e4ee16029c1f08b3717349e93d42ee854bf9",
+    (TASK_QUESTION_GENERATION_NO_DOC, "v1"): "7bdd7e5b2d12ae5a16bcfb23170faec1f8b298d57a443d4be8897ff38a609e0b",
 }
 
 
@@ -174,6 +177,13 @@ def _register_builtin() -> None:
         TASK_RUBRIC_GRADING, P.RUBRIC_GRADING_PROMPT_VERSION, P.build_rubric_grading_prompt,
         texts=(P.RUBRIC_GRADING_SYSTEM_PROMPT, P.RUBRIC_GRADING_USER_PROMPT_TEMPLATE),
         system_texts=(P.RUBRIC_GRADING_SYSTEM_PROMPT,), description="Rubric-based grading (level per criterion)"))
+    register_prompt(PromptSpec(
+        TASK_QUESTION_GENERATION_NO_DOC, P.QUESTION_GENERATION_NO_DOC_PROMPT_VERSION,
+        P.build_question_generation_no_doc_prompt,
+        texts=(P.QUESTION_GENERATION_NO_DOC_SYSTEM_PROMPT, P.QUESTION_GENERATION_NO_DOC_USER_PROMPT_TEMPLATE,
+               *(f"{k}={v}" for k, v in sorted(P.QUESTION_TYPE_FORMAT_INSTRUCTIONS.items()))),
+        system_texts=(P.QUESTION_GENERATION_NO_DOC_SYSTEM_PROMPT,),
+        description="Question generation from course_context only (no document)"))
 
 
 _register_builtin()

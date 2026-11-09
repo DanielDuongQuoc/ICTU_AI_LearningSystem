@@ -1,17 +1,24 @@
 from typing import Any, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.schemas.course import CourseContext
 
 Difficulty = Literal["easy", "medium", "hard"]
 QuestionType = Literal["multiple_choice", "true_false", "short_answer", "essay"]
+MAX_DOCUMENT_IDS = 5
 
 
 # ── Public API schemas ──────────────────────────────────────────────
 
 
 class QuestionGenerateRequest(BaseModel):
-    document_id: UUID = Field(..., description="UUID of an indexed document")
+    document_id: Optional[UUID] = Field(None, description="UUID of an indexed document")
+    document_ids: List[UUID] = Field(default_factory=list, max_length=MAX_DOCUMENT_IDS,
+                                     description="Several reference documents of the course (optional)")
+    course_context: Optional[CourseContext] = Field(
+        None, description="Structured course data; used to generate questions when no document is given")
     number_of_questions: int = Field(5, ge=1, le=20)
     difficulty: Difficulty = "medium"
     question_type: QuestionType = "short_answer"
@@ -30,10 +37,13 @@ class GeneratedQuestion(BaseModel):
     # Extensible fields — only populated for multiple_choice / true_false.
     options: Optional[List[str]] = None
     correct_answer: Optional[str] = None
+    grounded: Optional[bool] = Field(
+        None, description="false when generated from course_context without a reference document (review needed)")
 
 
 class QuestionGenerationResponse(BaseModel):
-    document_id: UUID
+    document_id: Optional[UUID] = None
+    document_ids: Optional[List[UUID]] = None
     questions: List[GeneratedQuestion]
 
 
@@ -51,13 +61,22 @@ class ExamMatrixItem(BaseModel):
 
 
 class ExamMatrixRequest(BaseModel):
-    document_id: UUID = Field(..., description="UUID of an indexed document")
+    document_id: Optional[UUID] = Field(None, description="UUID of an indexed document")
+    document_ids: List[UUID] = Field(default_factory=list, max_length=MAX_DOCUMENT_IDS)
+    course_context: Optional[CourseContext] = Field(
+        None, description="Structured course data; used to generate questions when no document is given")
     subject: Optional[str] = Field(
         default=None, max_length=200,
         description="Subject/course label from Module 1. Echoed back for traceability only; it is NOT sent to "
                     "the model, so it cannot influence or inject into the prompt.",
     )
     items: List[ExamMatrixItem] = Field(..., min_length=1, max_length=MAX_MATRIX_ITEMS)
+
+    @model_validator(mode="after")
+    def _needs_a_source(self) -> "ExamMatrixRequest":
+        if self.document_id is None and not self.document_ids and self.course_context is None:
+            raise ValueError("document_id, document_ids or course_context is required")
+        return self
 
     @field_validator("subject")
     @classmethod
@@ -93,7 +112,8 @@ class ExamMatrixItemResult(BaseModel):
 
 
 class ExamMatrixResponse(BaseModel):
-    document_id: UUID
+    document_id: Optional[UUID] = None
+    document_ids: Optional[List[UUID]] = None
     subject: Optional[str] = None
     requested_total: int
     generated_total: int

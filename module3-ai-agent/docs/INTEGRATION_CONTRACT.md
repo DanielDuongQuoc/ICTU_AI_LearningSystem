@@ -77,6 +77,14 @@ and come from the vector store, never from the model. When nothing relevant is f
 short_answer|multiple_choice|true_false|essay. Response:
 `{"document_id", "questions": [{"question_id", "question", "expected_answer", "difficulty", "type", "source_chunks", "options"?, "correct_answer"?}]}`.
 
+Reference material is optional (additive fields, the body above keeps working):
+
+- `document_ids`: up to 5 documents of the same course, retrieved together; the response adds `document_ids`.
+- `course_context`: `{"course_name", "course_code"?, "clos": [{"code", "description"}], "chapters": [], "language": "vi"}`.
+  Without any document the questions are generated from this structured data only, carry `"grounded": false`
+  and `source_chunks: []`, and must be reviewed by the lecturer. Sending none of `document_id`, `document_ids`,
+  `course_context` → 400 `EMPTY_DOCUMENT_ID`. `generate-matrix` accepts the same three fields.
+
 `POST /api/questions/generate-matrix`
 
 ```json

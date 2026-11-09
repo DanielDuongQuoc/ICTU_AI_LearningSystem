@@ -30,6 +30,7 @@ from app.core.exceptions import AppError, ErrorCode
 from app.core.prompts import (
     QUESTION_GENERATION_RETRIEVAL_QUERY,
 )
+from app.schemas.course import CourseContext
 from app.schemas.question import (
     ExamMatrixItem,
     ExamMatrixItemResult,
@@ -40,6 +41,7 @@ from app.schemas.question import (
     MatrixQuestion,
     QuestionGenerationResponse,
 )
+from app.services.context_builder import build_context
 from app.services.llm_service import LLMService, get_llm_service
 from app.services.rag_service import RAGService, get_rag_service
 
@@ -193,6 +195,88 @@ class QuestionGenerationService:
 
     async def generate_questions(
         self,
+        document_id: UUID | str | None = None,
+        number_of_questions: int = 5,
+        difficulty: str = "medium",
+        question_type: str = "short_answer",
+        request_id: Optional[str] = None,
+        document_ids: Optional[list[UUID | str]] = None,
+        course_context: Optional[CourseContext] = None,
+    ) -> QuestionGenerationResponse:
+        """One document (historical behaviour), several documents, or no document (``course_context`` only)."""
+        ids = list(dict.fromkeys(
+            [str(document_id).strip()] * bool(document_id is not None and str(document_id).strip())
+            + [str(d) for d in (document_ids or [])]
+        ))
+        if not ids and course_context is None:
+            raise AppError(ErrorCode.EMPTY_DOCUMENT_ID,
+                           "document_id must not be empty (or send document_ids / course_context).")
+        if len(ids) == 1:
+            res = await self._generate_single_document(ids[0], number_of_questions, difficulty, question_type,
+                                                       request_id)
+            if document_ids:
+                res.document_ids = [UUID(ids[0])]
+            return res
+        request_id = request_id or str(uuid.uuid4())
+        self._validate_request(ids[0] if ids else "course", number_of_questions, difficulty, question_type)
+        if ids:
+            return await self._generate_multi_document(ids, number_of_questions, difficulty, question_type,
+                                                       request_id, document_id)
+        return await self._generate_without_document(course_context, number_of_questions, difficulty,
+                                                     question_type, request_id)
+
+    async def _generate_multi_document(
+        self, ids: list[str], number_of_questions: int, difficulty: str, question_type: str,
+        request_id: str, document_id: Any,
+    ) -> QuestionGenerationResponse:
+        settings = get_settings()
+        top_k = min(max(number_of_questions * 2, runtime_config.current().top_k), settings.max_top_k)
+        context, chunks = await build_context(self._rag, ids, QUESTION_GENERATION_RETRIEVAL_QUERY,
+                                              request_id, top_k=top_k)
+        if not chunks:
+            raise AppError(ErrorCode.INSUFFICIENT_CONTEXT,
+                           "The documents do not contain enough information to generate questions.")
+        valid = await self._generate_valid_questions(context, number_of_questions, difficulty, question_type,
+                                                     request_id)
+        questions = []
+        for q in valid:
+            sources = lexical_source_fallback(q["question"], q["expected_answer"], chunks)
+            if not sources:
+                continue
+            questions.append(GeneratedQuestion(
+                question_id=str(uuid.uuid4()), question=q["question"], expected_answer=q["expected_answer"],
+                difficulty=difficulty, type=question_type,  # type: ignore[arg-type]
+                source_chunks=sources, options=q["options"], correct_answer=q["correct_answer"]))
+        if not questions:
+            raise AppError(ErrorCode.QUESTION_GENERATION_INVALID_RESPONSE,
+                           "The language model did not return usable questions.")
+        logger.info("Question generation finished | request_id=%s documents=%d generated_questions=%d",
+                    request_id, len(ids), len(questions))
+        return QuestionGenerationResponse(
+            document_id=UUID(str(document_id)) if document_id else None,
+            document_ids=[UUID(i) for i in ids], questions=questions)
+
+    async def _generate_without_document(
+        self, course: CourseContext, number_of_questions: int, difficulty: str, question_type: str,
+        request_id: str,
+    ) -> QuestionGenerationResponse:
+        version = runtime_config.current().prompt_version(prompt_registry.TASK_QUESTION_GENERATION_NO_DOC)
+        prompt = prompt_registry.build(
+            prompt_registry.TASK_QUESTION_GENERATION_NO_DOC, version,
+            course.as_data_block(), number_of_questions, difficulty, question_type, course.language)
+        valid = await self._generate_valid_questions("", number_of_questions, difficulty, question_type,
+                                                     request_id, prompt=prompt)
+        questions = [GeneratedQuestion(
+            question_id=str(uuid.uuid4()), question=q["question"], expected_answer=q["expected_answer"],
+            difficulty=difficulty, type=question_type,  # type: ignore[arg-type]
+            source_chunks=[], options=q["options"], correct_answer=q["correct_answer"], grounded=False,
+        ) for q in valid]
+        logger.info("Question generation finished | request_id=%s documents=0 grounded=False "
+                    "generated_questions=%d prompt_version=%s", request_id, len(questions), version)
+        return QuestionGenerationResponse(questions=questions)
+
+    async def _generate_single_document(
+        self,
         document_id: UUID | str,
         number_of_questions: int = 5,
         difficulty: str = "medium",
@@ -280,10 +364,12 @@ class QuestionGenerationService:
 
     async def generate_exam(
         self,
-        document_id: UUID | str,
+        document_id: UUID | str | None,
         items: list[ExamMatrixItem],
         subject: Optional[str] = None,
         request_id: Optional[str] = None,
+        document_ids: Optional[list[UUID | str]] = None,
+        course_context: Optional[CourseContext] = None,
     ) -> ExamMatrixResponse:
         """Generate one batch of questions per matrix row, sequentially (each row is one gated LLM call).
 
@@ -298,7 +384,7 @@ class QuestionGenerationService:
         questions: list[MatrixQuestion] = []
         seen: list[str] = []
         first_error: Optional[AppError] = None
-        doc_id = str(document_id)
+        doc_id = str(document_id) if document_id else None
 
         for index, item in enumerate(items):
             try:
@@ -308,6 +394,8 @@ class QuestionGenerationService:
                     difficulty=item.difficulty,
                     question_type=item.question_type,
                     request_id=request_id,
+                    document_ids=document_ids,
+                    course_context=course_context,
                 )
             except AppError as exc:
                 if index == 0:
@@ -341,7 +429,9 @@ class QuestionGenerationService:
             request_id, doc_id, len(items), requested, len(questions),
         )
         return ExamMatrixResponse(
-            document_id=UUID(doc_id), subject=subject, requested_total=requested,
+            document_id=UUID(doc_id) if doc_id else None,
+            document_ids=[UUID(str(d)) for d in document_ids] if document_ids else None,
+            subject=subject, requested_total=requested,
             generated_total=len(questions), complete=len(questions) == requested and all(r.status == "ok" for r in results),
             items=results, questions=questions,
         )
@@ -355,8 +445,9 @@ class QuestionGenerationService:
         difficulty: str,
         question_type: str,
         request_id: str,
+        prompt: Optional[tuple[str, str]] = None,
     ) -> list[dict[str, Any]]:
-        system_prompt, user_prompt = prompt_registry.build(
+        system_prompt, user_prompt = prompt or prompt_registry.build(
             prompt_registry.TASK_QUESTION_GENERATION,
             runtime_config.current().prompt_version(prompt_registry.TASK_QUESTION_GENERATION),
             context, number_of_questions, difficulty, question_type

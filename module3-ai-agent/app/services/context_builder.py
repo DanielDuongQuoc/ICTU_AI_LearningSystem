@@ -21,6 +21,7 @@ async def build_context(
     document_ids: Iterable[UUID | str],
     query: str,
     request_id: Optional[str] = None,
+    top_k: Optional[int] = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     """``(context, chunks)`` from every requested document. Unknown documents raise DOCUMENT_NOT_FOUND;
     documents without relevant chunks simply contribute nothing."""
@@ -32,7 +33,7 @@ async def build_context(
     parts: list[str] = []
     chunks: list[dict[str, Any]] = []
     for doc_id in ids:
-        retrieval = await rag.retrieve(doc_id, query, top_k=eff.top_k, request_id=request_id)
+        retrieval = await rag.retrieve(doc_id, query, top_k=top_k or eff.top_k, request_id=request_id)
         if retrieval["insufficient_context"] or not retrieval["chunks"]:
             continue
         for c in retrieval["chunks"]:
