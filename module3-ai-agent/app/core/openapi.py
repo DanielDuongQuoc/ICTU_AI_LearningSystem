@@ -12,10 +12,13 @@ from app.schemas.common import ErrorResponse
 
 ERROR_DESCRIPTIONS: dict[int, str] = {
     400: "Invalid input (domain validation code such as EMPTY_QUERY, INVALID_TOP_K, INVALID_PDF).",
+    401: "Agent service authentication required or invalid credentials (AGENT_UNAUTHORIZED).",
+    403: "Action or assessment mode is forbidden (AGENT_SCOPE_FORBIDDEN, ASSESSMENT_MODE_FORBIDDEN).",
     404: "Document not found (DOCUMENT_NOT_FOUND).",
+    409: "Conflict on idempotency key or session state (IDEMPOTENCY_KEY_CONFLICT, SESSION_STATE_CONFLICT).",
     413: "File or document too large (FILE_TOO_LARGE, DOCUMENT_LIMIT_EXCEEDED: pages/text/chunks).",
     429: "Rate limit exceeded (RATE_LIMITED); see the Retry-After header.",
-    422: "Invalid request data (VALIDATION_ERROR) or not enough document context (INSUFFICIENT_CONTEXT).",
+    422: "Invalid request data (VALIDATION_ERROR), unsupported format (UNSUPPORTED_ASSESSMENT_FORMAT), or not enough document context (INSUFFICIENT_CONTEXT).",
     500: "Unexpected server error (INTERNAL_SERVER_ERROR) - no internals are exposed.",
     502: "Upstream model error (EMBEDDING_ERROR, LLM_INVALID_JSON, LLM_EMPTY_RESPONSE, ...).",
     503: "Dependency unavailable or overloaded (OLLAMA_UNAVAILABLE, OLLAMA_MODEL_NOT_FOUND, CHROMA_ERROR, SERVICE_OVERLOADED).",

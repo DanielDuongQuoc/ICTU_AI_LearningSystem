@@ -132,6 +132,20 @@ class Settings(BaseSettings):
     # CORS: comma-separated origins. Empty (default) = CORS disabled (server-to-server use).
     cors_allowed_origins: str = Field("")
 
+    # H12 AI Agent Architecture (PI 2.1, PI 2.2, PI 3.1)
+    agent_model_adapter: str = Field("gemini")
+    agent_lcms_mode: str = Field("mock")
+    agent_lcms_base_url: str = Field("http://localhost:5000")
+    agent_lcms_timeout_s: float = Field(15.0)
+    agent_auth_required: bool = Field(False)
+    agent_service_secret: str = Field("", repr=False)
+    agent_max_dialogue_turns: int = Field(6)
+    agent_idempotency_ttl_s: int = Field(3600)
+    agent_session_db_path: str = Field("./data/h12_sessions.db")
+    agent_session_retention_days: int = Field(30)
+    agent_context_window_turns: int = Field(6)
+    agent_session_max_context_chars: int = Field(6000)
+
     @property
     def gemini_api_keys(self) -> list[str]:
         """All configured Gemini API keys (comma/semicolon/whitespace-separated in GEMINI_API_KEY)."""
@@ -177,6 +191,22 @@ class Settings(BaseSettings):
         if not (0.0 <= v <= 1.0):
             raise ValueError("similarity_threshold must be between 0.0 and 1.0")
         return v
+
+    @field_validator("agent_model_adapter")
+    @classmethod
+    def validate_agent_model_adapter(cls, v: str) -> str:
+        val = (v or "").strip().lower()
+        if val not in {"gemini", "mock"}:
+            raise ValueError("AGENT_MODEL_ADAPTER must be 'gemini' or 'mock'")
+        return val
+
+    @field_validator("agent_lcms_mode")
+    @classmethod
+    def validate_agent_lcms_mode(cls, v: str) -> str:
+        val = (v or "").strip().lower()
+        if val not in {"mock", "http"}:
+            raise ValueError("AGENT_LCMS_MODE must be 'mock' or 'http'")
+        return val
 
     @model_validator(mode="after")
     def validate_configuration(self) -> "Settings":
@@ -281,6 +311,25 @@ class Settings(BaseSettings):
             errors.append("MAX_CONCURRENT_UPLOADS must be >= 0 (0 = unlimited)")
         if self.rate_limit_per_minute < 0:
             errors.append("RATE_LIMIT_PER_MINUTE must be >= 0 (0 = disabled)")
+        parsed_lcms = urlparse(self.agent_lcms_base_url)
+        if parsed_lcms.scheme not in ("http", "https") or not parsed_lcms.netloc:
+            errors.append("AGENT_LCMS_BASE_URL must be a valid http(s) URL")
+        if not (1 <= self.agent_max_dialogue_turns <= 20):
+            errors.append("AGENT_MAX_DIALOGUE_TURNS must be between 1 and 20")
+        if self.agent_idempotency_ttl_s <= 0:
+            errors.append("AGENT_IDEMPOTENCY_TTL_S must be > 0")
+        if self.agent_lcms_timeout_s <= 0:
+            errors.append("AGENT_LCMS_TIMEOUT_S must be > 0")
+        if not self.agent_session_db_path.strip():
+            errors.append("AGENT_SESSION_DB_PATH must not be empty")
+        if self.agent_session_retention_days < 1:
+            errors.append("AGENT_SESSION_RETENTION_DAYS must be >= 1")
+        if not (1 <= self.agent_context_window_turns <= 20):
+            errors.append("AGENT_CONTEXT_WINDOW_TURNS must be between 1 and 20")
+        if self.agent_session_max_context_chars < 500:
+            errors.append("AGENT_SESSION_MAX_CONTEXT_CHARS must be >= 500")
+        if self.agent_auth_required and not self.agent_service_secret.strip():
+            errors.append("AGENT_SERVICE_SECRET must not be empty when AGENT_AUTH_REQUIRED=true")
         if self.app_env == "production":
             if "*" in self.cors_origins:
                 errors.append("CORS_ALLOWED_ORIGINS must not contain '*' in production")

@@ -34,6 +34,17 @@ backward compatibility (see [Legacy names](#legacy-names)).
 | `POST /api/grading/grade` | Grade one submission with an approved rubric (homework PASS/FAIL, in-class points) | `GradeResult` |
 | `POST /api/grading/batch` | Grade several submissions of one question | `GradeBatchResponse` |
 | `POST /api/submissions/handwritten/transcribe` | Multipart page images (JPG/PNG/PDF) → transcript + review flags | `TranscriptionResponse` |
+| `GET /api/agent/capabilities` | H12 agent framework, adapter mode (`mock` vs `live`), role boundaries & rules | `AgentCapabilitiesResponse` |
+| `POST /api/agent/execute-skeleton` | Controlled LangGraph skeleton (mode/scope guard, idempotency, draft boundary) | `AgentSkeletonResponse` |
+| `POST /api/agent/knowledge/index` | Index versioned, approved lesson content (`student_safe` / `teacher_only`) | `LessonKnowledgeIndexResponse` |
+| `POST /api/agent/knowledge/retrieve` | Retrieve versioned lesson chunks filtered by role visibility scope | `LessonKnowledgeRetrieveResponse` |
+| `POST /api/agent/sessions` | Open/resume isolated `(student, lesson, attempt)` session verified via LCMS | `SessionDetailResponse` |
+| `GET /api/agent/sessions/{session_id}` | Read isolated session history and context window for owning student | `SessionDetailResponse` |
+| `POST /api/agent/questions/draft` | Teacher essay question drafting workflow grounded in approved lesson | `QuestionDraftWorkflowResponse` |
+| `POST /api/agent/knowing/grade-suggestion` | Knowing fixed essay rubric scoring suggestion with teacher handoff | `KnowingGradingWorkflowResponse` |
+| `POST /api/agent/understanding/sessions/start` | Start or resume an isolated Understanding adaptive text chat session | `StartUnderstandingSessionResponse` |
+| `POST /api/agent/understanding/sessions/{session_id}/turns` | Run one Understanding adaptive dialogue turn with PI 3.4 security guards | `UnderstandingTurnResponse` |
+| `POST /api/agent/understanding/sessions/{session_id}/close` | Explicitly close an active Understanding dialogue session and hand off to LCMS | `CloseUnderstandingSessionResponse` |
 | `GET /metrics` | Prometheus text metrics (internal, not in OpenAPI) | text |
 | `GET /docs`, `GET /openapi.json` | API documentation | |
 
@@ -191,6 +202,64 @@ Response `{"pages": [{"page", "text", "confidence", "unreadable_count", "diagram
 `submission_kind: "handwritten_transcript"`, `answer: text` and `extra_flags: flags` (homework with `unreadable` or
 `diagram_present` becomes `needs_review`). Limits: `MAX_HANDWRITTEN_PAGES`, `MAX_UPLOAD_SIZE_MB` in total.
 
+## H12 Agent Foundation (Milestone 1)
+
+`GET /api/agent/capabilities` returns the active `langgraph` framework version, `adapter_mode` (`mock` vs `live`), `lcms_mode` (`mock` vs `http`), `auth_required`, forbidden modes (`classroom_exam`), forbidden formats (`multiple_choice`, `mcq`, `true_false`, `quiz`), forbidden channels (`voice`, `audio`, `speech`, `oral`), and per-role policies (`question_drafting`, `grading_support`, `dialogue_assessment`).
+
+`POST /api/agent/execute-skeleton` enforces:
+- Optional `X-Agent-Service-Key` verification when `AGENT_AUTH_REQUIRED=true`.
+- Hard denial (`403 ASSESSMENT_MODE_FORBIDDEN`) for `classroom_exam`.
+- Format/channel enforcement (`422 UNSUPPORTED_ASSESSMENT_FORMAT`): essay-only for Knowing/drafting and `text_chat`-only for Understanding.
+- Role/scope permissions (`403 AGENT_SCOPE_FORBIDDEN`) and `Idempotency-Key` replay/conflict (`409 IDEMPOTENCY_KEY_CONFLICT`).
+- Draft boundary: `publication_status="draft_suggestion"`, `released=false`, `teacher_review_required=true`, with explicit `X-AI-Adapter-Mode` (`mock` | `live`) and `X-AI-Framework: langgraph` headers.
+
+## H12 Tools, Knowledge & Session Memory (Milestone 2)
+
+- **Authorized LCMS Tools (`AGENT_LCMS_MODE=mock|http`):** `fetch_authorized_lesson`, `fetch_approved_questions_rubric`, `fetch_assessment_context`, `record_question_draft`, `record_grading_suggestion`, `record_dialogue_outcome`. All `record_*` tools persist drafts with `publication_status="draft_suggestion"`, `released=false`, and `Idempotency-Key` protection; `student_safe` scope strips `teacher_only_notes`, `answer_key`, and rubric `key_points`.
+- **Versioned Lesson Knowledge:** `POST /api/agent/knowledge/index` and `POST /api/agent/knowledge/retrieve` partition ChromaDB chunks by `lesson_id`, `knowledge_version`, `approved=true`, and `visibility` (`student_safe` vs `teacher_only`).
+- **Isolated Session Memory:** `POST /api/agent/sessions` and `GET /api/agent/sessions/{session_id}` enforce LCMS classroom-exam verification (`403 ASSESSMENT_MODE_FORBIDDEN`), strict ownership isolation by `(student_id, lesson_id, attempt_id)` (`403 AGENT_SCOPE_FORBIDDEN`), retention expiry, and bounded context windows.
+
+## H12 Question Drafting & Knowing Grading Support (Milestone 3)
+
+- **Teacher Essay Question Drafting (`POST /api/agent/questions/draft`):** Runs a 6-node LangGraph workflow enforcing `essay`-only format (rejects MCQ/true-false), fetching approved lesson material from LCMS, retrieving grounded ChromaDB chunks (returns `422 INSUFFICIENT_CONTEXT` with 0 LLM calls when missing), and handing off unpublished drafts (`publication_status="draft_suggestion"`, `released=false`) via `record_question_draft`.
+- **Knowing Essay Grading Support (`POST /api/agent/knowing/grade-suggestion`):** Runs a 7-node LangGraph workflow verifying LCMS `fetch_assessment_context` (denies active `classroom_exam`), validating the approved rubric (`R1..R6`), evaluating fixed essay answers deterministically (0 LLM calls on empty/question-copy submissions; `injection_suspected` flags escalate), and returning `status="pending_teacher_review"` or `"needs_teacher_escalation"` with `released=false` and `teacher_handoff=true`.
+
+---
+
+## H12 Understanding Adaptive Text Chat (Milestone 4)
+
+The Understanding workflow provides multi-turn adaptive text-only dialogue grounded strictly in teacher-approved `student_safe` lesson material (`home_understanding` mode; `voice`/`oral`/`classroom_exam` are strictly blocked).
+
+### `POST /api/agent/understanding/sessions/start`
+- Initializes or resumes an isolated `(student_id, lesson_id, lesson_version, attempt_id, assessment_mode)` session in `SessionMemoryStore` after checking `fetch_assessment_context`, `fetch_authorized_lesson`, `fetch_approved_questions_rubric` (`student_safe` visibility, no `answer_key` or `teacher_only_notes`), and indexing/retrieving `student_safe` evidence.
+- Returns `session_id`, initialized `rubric_progress`, `max_turns`, `opening_prompt`, `evidence_refs`, `tool_outcomes`, and `trace`.
+
+### `POST /api/agent/understanding/sessions/{session_id}/turns`
+- Runs the conditional 7-node LangGraph turn workflow (`validate_mode_and_session` -> `fetch_safe_lesson_and_rubric` -> `retrieve_student_safe_evidence` -> `inspect_security_and_evaluate_turn` -> `decide_next_action` -> `close_and_record_outcome` | `finalize_active_turn`).
+- Enforces single-student ownership (`403 AGENT_SCOPE_FORBIDDEN`), active session state (`409 SESSION_STATE_CONFLICT`), real-time `classroom_exam` lock check via `fetch_assessment_context`, and PI 3.4 dialogue security guards (`REDIRECT_ATTEMPT`, `ANSWER_REVEAL_ATTEMPT`, `SCORE_ALTER_ATTEMPT`, `PROMPT_INJECTION`, confidential answer leak prevention, and escalation on repeated attacks).
+- Supports per-session `Idempotency-Key` header/body deduplication (`X-Idempotent-Replay: true` / `409 IDEMPOTENCY_KEY_CONFLICT`).
+- When a stopping condition fires (`criteria_covered`, `max_turns_reached`, `student_requested_closure`, `repeated_injection_escalation`), persists the outcome back to LCMS via `record_dialogue_outcome` (`teacher_review_required=true`, `publication_status="draft_suggestion"`, `released=false`) and closes/escalates the session.
+
+### `POST /api/agent/understanding/sessions/{session_id}/close`
+- Explicitly closes an active Understanding session for its owner (`stopping_reason="student_requested_closure"`), records the dialogue outcome receipt in LCMS, and returns `409 SESSION_STATE_CONFLICT` if already closed/escalated.
+
+---
+
+## H12 Internal LCMS HTTP Tool Contract (Milestone 5)
+
+When `AGENT_LCMS_MODE=http`, `HttpLcmsToolClient` communicates with `AGENT_LCMS_BASE_URL` over HTTP using `X-Agent-Service-Key`, `X-Request-ID`, and `Idempotency-Key`, normalizing ASP.NET Core `System.Text.Json` camelCase keys (`lessonId`, `studentSafeContent`, `classroomExamActive`, `publicationStatus`, etc.) and ProblemDetails error bodies into canonical H12 records and `ErrorCode`s:
+
+- `GET /api/internal/agent/lessons/{lesson_id}?version={version}&visibility={visibility}`
+- `GET /api/internal/agent/lessons/{lesson_id}/assessment-materials?version={version}&rubric_id={rubric_id}&visibility={visibility}`
+- `POST /api/internal/agent/assessment-context` (`lesson_id`, `lesson_version`, `student_id`, `attempt_id`, `requested_mode`)
+- `POST /api/internal/agent/drafts/questions` (teacher draft handoff; `draft_suggestion`, `released=false`)
+- `POST /api/internal/agent/suggestions/grading` (Knowing rubric scoring suggestion handoff; `draft_suggestion`, `released=false`)
+- `POST /api/internal/agent/outcomes/dialogue` (Understanding dialogue outcome handoff; `draft_suggestion`, `released=false`)
+
+A standalone documented simulator (`python -m app.h12_agent.lcms_simulator`, default `127.0.0.1:5099`) and the C# synchronization guide (`docs/INTEGRATION_SYNC_LCMS_DESKTOP.md`) provide offline verification and side-by-side integration patches for `backend_api` and `student_desktop_app`.
+
+---
+
 ## Health
 
 ```json
@@ -227,10 +296,17 @@ Validation failures are 422 `VALIDATION_ERROR`; rate limit 429 `RATE_LIMITED` wi
 | 400 | `INVALID_QUESTION_TYPE` | question_type not supported |
 | 400 | `INVALID_SCORE` | max_score invalid (502 when the model produced the bad score) |
 | 400 | `INVALID_TOP_K` | top_k < 1 or > MAX_TOP_K |
+| 401 | `AGENT_UNAUTHORIZED` | Missing or invalid X-Agent-Service-Key when AGENT_AUTH_REQUIRED=true |
+| 403 | `AGENT_SCOPE_FORBIDDEN` | Caller scope or requested tool is not authorized for the target agent role |
+| 403 | `ASSESSMENT_MODE_FORBIDDEN` | Controlled classroom examination mode or disallowed mode for role |
 | 404 | `DOCUMENT_NOT_FOUND` | No chunks stored for this document_id |
 | 404 | `FILE_NOT_FOUND` | Internal file reference missing |
+| 404 | `LESSON_NOT_FOUND` | Lesson, version, or approved assessment material not found in LCMS |
 | 404 | `NOT_FOUND` | Unknown route |
+| 404 | `SESSION_NOT_FOUND` | Assessment session does not exist |
 | 405 | `METHOD_NOT_ALLOWED` | HTTP method not allowed on this route |
+| 409 | `IDEMPOTENCY_KEY_CONFLICT` | Idempotency-Key reused with a different request payload |
+| 409 | `SESSION_STATE_CONFLICT` | Assessment session state conflict (e.g. session already closed) |
 | 413 | `FILE_TOO_LARGE` | Upload exceeds MAX_UPLOAD_SIZE_MB |
 | 413 | `DOCUMENT_LIMIT_EXCEEDED` | Page / extracted-text / chunk limit exceeded |
 | 413 | `REQUEST_TOO_LARGE` | JSON body exceeds MAX_REQUEST_BODY_BYTES |
@@ -238,6 +314,8 @@ Validation failures are 422 `VALIDATION_ERROR`; rate limit 429 `RATE_LIMITED` wi
 | 422 | `NO_EXTRACTABLE_TEXT` | No extractable text (e.g. scanned images, no OCR) |
 | 422 | `RUBRIC_INVALID` | Rubric violates the rubric rules (generation after one repair, or grading input) |
 | 422 | `RUBRIC_NOT_APPROVED` | Grading requested with a rubric whose status is not `approved` |
+| 422 | `UNAPPROVED_KNOWLEDGE` | Lesson material or rubric is not teacher-approved for H12 use |
+| 422 | `UNSUPPORTED_ASSESSMENT_FORMAT` | Disallowed assessment format or channel (e.g. multiple-choice or voice substitution) |
 | 422 | `VALIDATION_ERROR` | Request body/params fail schema validation |
 | 429 | `RATE_LIMITED` | Per-client rate limit exceeded (see Retry-After) |
 | 500 | `APPLICATION_CONFIGURATION_ERROR` | Invalid configuration (startup failure; not an HTTP response) |
@@ -253,6 +331,7 @@ Validation failures are 422 `VALIDATION_ERROR`; rate limit 429 `RATE_LIMITED` wi
 | 502 | `EMBEDDING_INVALID_RESPONSE` | Gemini returned a malformed embedding or an unexpected HTTP status |
 | 502 | `EVALUATION_INVALID_RESPONSE` | Model evaluation JSON invalid / inconsistent |
 | 502 | `GRADING_INVALID_RESPONSE` | Model grading output invalid (unknown criterion/level) after one retry |
+| 502 | `LCMS_TOOL_ERROR` | Institutional LCMS returned a malformed response or unexpected error |
 | 502 | `LLM_EMPTY_RESPONSE` | Model returned empty output |
 | 502 | `LLM_INVALID_JSON` | Model output is not valid JSON (after one retry) |
 | 502 | `LLM_OUTPUT_REJECTED` | Model output rejected (too large / leaked prompt) |
@@ -264,6 +343,7 @@ Validation failures are 422 `VALIDATION_ERROR`; rate limit 429 `RATE_LIMITED` wi
 | 503 | `CHROMA_ERROR` | Vector store operation failed / unavailable |
 | 503 | `EMBEDDING_MODEL_NOT_FOUND` | GEMINI_EMBEDDING_MODEL does not exist |
 | 503 | `EMBEDDING_SERVICE_UNAVAILABLE` | Gemini embedding endpoint unreachable or API key missing |
+| 503 | `LCMS_UNAVAILABLE` | Institutional LCMS tool service is unreachable or timed out |
 | 503 | `OLLAMA_MODEL_NOT_FOUND` | GEMINI_MODEL does not exist |
 | 503 | `OLLAMA_UNAVAILABLE` | Gemini API unreachable or GEMINI_API_KEY not configured |
 | 503 | `SERVICE_OVERLOADED` | No LLM/embedding/upload slot free in time (retry shortly) |

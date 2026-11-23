@@ -61,8 +61,16 @@ origins only; credentials are never allowed; `*` is rejected when `APP_ENV=produ
 
 ## Known limitations
 
-- No authN/authZ, no per-user identity, no multi-tenant separation beyond `document_id` filtering.
+- Legacy non-`/api/agent/*` routes remain internal server-to-server endpoints without caller authN/authZ (whereas `/api/agent/*` routes support service-key auth, role scope, and session ownership isolation).
 - Rate limiting is not distributed. The PDF timeout cannot interrupt a single pathological page.
 - Prompt-injection defence is structural + validation; wording of a real model can still be influenced,
   but scores, sources and percentages cannot be forged.
 - Run `pip-audit -r requirements.txt` periodically (CI has an advisory, non-blocking job).
+
+## H12 AI Agent Security & Boundaries
+
+- **Service-to-service credential:** Enabling `AGENT_AUTH_REQUIRED=true` requires a constant-time (`hmac.compare_digest`) `X-Agent-Service-Key` matching `AGENT_SERVICE_SECRET` on all `/api/agent/*` routes (`401 AGENT_UNAUTHORIZED`). Client apps never hold `GEMINI_API_KEY`.
+- **Role scopes, formats & `classroom_exam` lock:** `enforce_mode_and_scope` separates `question_drafting` (`teacher`, `lcms_service`), `grading_support` (`teacher`, `lcms_service`), and `dialogue_assessment` (`student`, `lcms_service`); rejects controlled classroom examinations (`403 ASSESSMENT_MODE_FORBIDDEN`, checked live before every `/start`, `/turns`, `/close`, and Knowing call) as well as MCQ/voice substitutions (`422 UNSUPPORTED_ASSESSMENT_FORMAT`).
+- **Knowledge & session isolation (PI 2.3):** Approved lessons are indexed by `(lesson_id, knowledge_version, visibility)`. `student_safe` retrieval excludes `teacher_only` answer keys and notes (`sanitize_lesson_for_visibility`, `sanitize_bundle_for_visibility`, Python post-filter). SQLite `SessionMemoryStore` isolates state per `(student_id, lesson_id, attempt_id, assessment_mode)` and denies cross-owner access (`403 AGENT_SCOPE_FORBIDDEN`).
+- **Dialogue guards (PI 3.4):** `app/h12_agent/dialogue_guards.py` blocks redirect, answer-reveal, and score-alter attacks without updating rubric criteria, prevents answer-key marker and system-prompt shingle leakage (`guard_assistant_reply`), escalates after repeated attacks (`repeated_injection_escalation`), and blocks post-closure chat (`409 SESSION_STATE_CONFLICT`).
+- **No silent grade publication:** Question drafts, Knowing scoring suggestions, and Understanding outcomes always carry `publication_status="draft_suggestion"`, `released=false`, and `teacher_review_required=true`.

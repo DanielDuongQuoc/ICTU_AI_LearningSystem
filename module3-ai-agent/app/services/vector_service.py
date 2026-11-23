@@ -41,6 +41,8 @@ class VectorService:
         chunks: list[Chunk],
         document_id: str,
         source: str,
+        *,
+        extra_metadata: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """Embed and store chunks in ChromaDB.
 
@@ -109,6 +111,10 @@ class VectorService:
                 "embedding_model": self._embedding.model_name,
 
             }
+            if extra_metadata:
+                for key, value in extra_metadata.items():
+                    if isinstance(value, (str, int, float, bool)):
+                        meta[key] = value
             # Store page info
             if chunk.metadata.page is not None:
                 meta["page"] = chunk.metadata.page

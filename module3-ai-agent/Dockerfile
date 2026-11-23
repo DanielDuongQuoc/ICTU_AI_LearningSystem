@@ -15,7 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.tx[t] module3-ai-agent/requirements.tx[t] ./
+# BuildKit only skips an unmatched wildcard when its PARENT directory exists, so the directory component is a
+# wildcard too (module3-ai-agen[t]); a literal module3-ai-agent/ fails with 'lstat /module3-ai-agent' when the
+# context is ./module3-ai-agent.  Exactly one of the two sources matches in either context.
+COPY requirements.tx[t] module3-ai-agen[t]/requirements.tx[t] ./
 RUN pip install -r requirements.txt
 
 # ---- runtime ---------------------------------------------------------
@@ -29,17 +32,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH" \
     APP_HOST=0.0.0.0 \
     APP_PORT=8003 \
-    CHROMA_PERSIST_DIRECTORY=/app/data/chroma
+    CHROMA_PERSIST_DIRECTORY=/app/data/chroma \
+    AGENT_SESSION_DB_PATH=/app/data/sessions/h12_sessions.db
 
 WORKDIR /app
 
 RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --home-dir /app --no-create-home app \
-    && mkdir -p /app/data/chroma /app/uploads \
+    && mkdir -p /app/data/chroma /app/data/sessions /app/uploads \
     && chown -R app:app /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=app:app ap[p] module3-ai-agent/ap[p] ./app/
+COPY --chown=app:app ap[p] module3-ai-agen[t]/ap[p] ./app/
 
 USER app
 

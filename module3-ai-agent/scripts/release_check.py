@@ -32,6 +32,13 @@ CONTRACT = {
     ("post", "/api/rubrics/generate"), ("post", "/api/rubrics/validate"),
     ("post", "/api/grading/grade"), ("post", "/api/grading/batch"),
     ("post", "/api/submissions/handwritten/transcribe"),
+    ("get", "/api/agent/capabilities"), ("post", "/api/agent/execute-skeleton"),
+    ("post", "/api/agent/knowledge/index"), ("post", "/api/agent/knowledge/retrieve"),
+    ("post", "/api/agent/sessions"), ("get", "/api/agent/sessions/{session_id}"),
+    ("post", "/api/agent/questions/draft"), ("post", "/api/agent/knowing/grade-suggestion"),
+    ("post", "/api/agent/understanding/sessions/start"),
+    ("post", "/api/agent/understanding/sessions/{session_id}/turns"),
+    ("post", "/api/agent/understanding/sessions/{session_id}/close"),
 }
 
 
@@ -85,9 +92,10 @@ def check_dockerfile() -> Result:
         problems.append("does not switch to a non-root USER")
     if re.search(r"(?mi)^(COPY|ADD)\s.*\.env(\s|$)", dockerfile):
         problems.append("copies .env")
-    # Render builds with either the repo root or module3-ai-agent/ as context: both COPY forms must stay.
-    for needle in ("COPY requirements.tx[t] module3-ai-agent/requirements.tx[t] ./",
-                   "ap[p] module3-ai-agent/ap[p] ./app/", "${PORT:-${APP_PORT}}", "HEALTHCHECK"):
+    # Render builds with either the repo root or module3-ai-agent/ as context: both COPY forms must stay.  The directory
+    # component must be a wildcard too (module3-ai-agen[t]): BuildKit errors on a literal parent dir that is absent.
+    for needle in ("COPY requirements.tx[t] module3-ai-agen[t]/requirements.tx[t] ./",
+                   "ap[p] module3-ai-agen[t]/ap[p] ./app/", "${PORT:-${APP_PORT}}", "HEALTHCHECK"):
         if needle not in dockerfile:
             problems.append(f"missing {needle!r}")
     return ("Dockerfile (non-root, no .env, dual build context, $PORT)", "FAIL" if problems else "PASS", "; ".join(problems))

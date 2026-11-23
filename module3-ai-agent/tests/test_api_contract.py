@@ -850,7 +850,15 @@ def test_openapi_contains_exactly_the_documented_contract_endpoints():
              # reviewed additive endpoints: rubric generation/validation and rubric-based grading
              ("post", "/api/rubrics/generate"), ("post", "/api/rubrics/validate"),
              ("post", "/api/grading/grade"), ("post", "/api/grading/batch"),
-             ("post", "/api/submissions/handwritten/transcribe")}
+             ("post", "/api/submissions/handwritten/transcribe"),
+             # H12 AI Agent Milestone 1, 2, 3 & 4 endpoints
+             ("get", "/api/agent/capabilities"), ("post", "/api/agent/execute-skeleton"),
+             ("post", "/api/agent/knowledge/index"), ("post", "/api/agent/knowledge/retrieve"),
+             ("post", "/api/agent/sessions"), ("get", "/api/agent/sessions/{session_id}"),
+             ("post", "/api/agent/questions/draft"), ("post", "/api/agent/knowing/grade-suggestion"),
+             ("post", "/api/agent/understanding/sessions/start"),
+             ("post", "/api/agent/understanding/sessions/{session_id}/turns"),
+             ("post", "/api/agent/understanding/sessions/{session_id}/close")}
     assert all((m, p) in known for m, p in extra), f"undocumented API surface: {extra}"
 
 

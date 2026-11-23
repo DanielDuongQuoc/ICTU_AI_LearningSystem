@@ -20,17 +20,19 @@ lxml==6.1.3
 # Vector Database
 chromadb==0.5.23
 
-# HTTP Client (Gemini API calls + async test client)
+# HTTP Client (Gemini API calls; also used by the async test client)
 httpx==0.28.0
 
 # File Uploads
 python-multipart==0.0.32
 
-# Testing
-pytest==8.3.4
-pytest-asyncio==0.24.0
-pytest-mock==3.14.0
+# Async runtime used by Starlette/httpx (pinned for reproducible builds)
 anyio==4.15.1
 
-# Static docker-compose checks in tests
+# YAML: agent/config.py (agent.yaml for the agent CLI) and static docker-compose checks in tests
 PyYAML==6.0.3
+
+# Agent Orchestration Framework (H12 PI 3.1)
+langgraph==1.2.24
+
+# Test-only tools live in requirements-dev.txt (pip install -r requirements-dev.txt)

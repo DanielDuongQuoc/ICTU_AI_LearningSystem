@@ -37,8 +37,10 @@ services:
       - APP_HOST=0.0.0.0
       - APP_PORT=8003
       - CHROMA_PERSIST_DIRECTORY=/app/data/chroma
+      - AGENT_SESSION_DB_PATH=/app/data/sessions/h12_sessions.db
     volumes:
       - chroma_data:/app/data/chroma
+      - session_data:/app/data/sessions
       - uploads_data:/app/uploads
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8003/health/live', timeout=5)"]
@@ -49,4 +51,5 @@ services:
 
 volumes:
   chroma_data:
+  session_data:
   uploads_data:

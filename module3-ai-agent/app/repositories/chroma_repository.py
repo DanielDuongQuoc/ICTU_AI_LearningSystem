@@ -354,3 +354,126 @@ class ChromaRepository:
     def document_exists(self, document_id: str) -> bool:
         """Return True if at least one chunk for ``document_id`` exists."""
         return self.count_by_document(document_id) > 0
+
+    # ── H12 Versioned lesson knowledge (PI 2.3) ─────────────────────
+
+    @_chroma_guard
+    def query_lesson(
+        self,
+        *,
+        query_embedding: list[float],
+        lesson_id: str,
+        knowledge_version: str,
+        visibility_scope: str = "student_safe",
+        require_approved: bool = True,
+        top_k: Optional[int] = None,
+        similarity_threshold: Optional[float] = None,
+    ) -> list[dict[str, Any]]:
+        """Semantic search scoped to a specific ``(lesson_id, knowledge_version)`` and visibility."""
+        settings = get_settings()
+        k = top_k if top_k is not None else settings.top_k
+        threshold = similarity_threshold if similarity_threshold is not None else settings.similarity_threshold
+        k = max(1, min(k, 100))
+
+        conditions: list[dict[str, Any]] = [
+            {"lesson_id": lesson_id},
+            {"knowledge_version": knowledge_version},
+        ]
+        if require_approved:
+            conditions.append({"approved": True})
+        if visibility_scope == "student_safe":
+            conditions.append({"visibility": "student_safe"})
+
+        raw = self._collection.query(
+            query_embeddings=[query_embedding],
+            n_results=k,
+            where={"$and": conditions},
+            include=["documents", "metadatas", "distances"],
+        )
+
+        results: list[dict[str, Any]] = []
+        if not raw["ids"] or not raw["ids"][0]:
+            return results
+
+        ids = raw["ids"][0]
+        docs = raw["documents"][0] if raw["documents"] else [""] * len(ids)
+        metas = raw["metadatas"][0] if raw["metadatas"] else [{}] * len(ids)
+        distances = raw["distances"][0] if raw["distances"] else [0.0] * len(ids)
+
+        for i, record_id in enumerate(ids):
+            similarity = 1.0 - distances[i]
+            if similarity < threshold:
+                continue
+            meta = metas[i] if metas[i] else {}
+            if meta.get("lesson_id") != lesson_id or meta.get("knowledge_version") != knowledge_version:
+                continue
+            if require_approved and meta.get("approved") is not True:
+                continue
+            if visibility_scope == "student_safe" and meta.get("visibility") != "student_safe":
+                continue
+
+            page = meta.get("page")
+            if page is None and meta.get("pages"):
+                page = meta["pages"][0] if isinstance(meta["pages"], list) else meta["pages"]
+
+            results.append({
+                "chunk_id": meta.get("chunk_id", record_id),
+                "document_id": meta.get("document_id", ""),
+                "lesson_id": meta.get("lesson_id", lesson_id),
+                "knowledge_version": meta.get("knowledge_version", knowledge_version),
+                "visibility": meta.get("visibility", "student_safe"),
+                "approved": bool(meta.get("approved", False)),
+                "text": docs[i] if docs[i] else "",
+                "page": page,
+                "source": meta.get("source", ""),
+                "score": round(similarity, 4),
+            })
+
+        return results
+
+    @_chroma_guard
+    def delete_lesson_version(self, lesson_id: str, knowledge_version: str) -> int:
+        """Delete all chunks belonging to ``(lesson_id, knowledge_version)``."""
+        existing = self._collection.get(
+            where={"$and": [{"lesson_id": lesson_id}, {"knowledge_version": knowledge_version}]},
+            include=[],
+        )
+        ids_to_delete = existing["ids"] if existing["ids"] else []
+        if not ids_to_delete:
+            return 0
+        self._collection.delete(ids=ids_to_delete)
+        logger.info(
+            "Deleted %d chunks for lesson_id=%s version=%s",
+            len(ids_to_delete),
+            lesson_id,
+            knowledge_version,
+        )
+        return len(ids_to_delete)
+
+    @_chroma_guard
+    def list_lesson_versions(self, lesson_id: str) -> list[dict[str, Any]]:
+        """Summarize indexed knowledge versions for a lesson."""
+        got = self._collection.get(where={"lesson_id": lesson_id}, include=["metadatas"])
+        grouped: dict[str, dict[str, Any]] = {}
+        for meta in got.get("metadatas") or []:
+            if not meta:
+                continue
+            ver = str(meta.get("knowledge_version", "v1"))
+            entry = grouped.setdefault(
+                ver,
+                {
+                    "knowledge_version": ver,
+                    "chunk_count": 0,
+                    "student_safe_chunks": 0,
+                    "teacher_only_chunks": 0,
+                    "approved": True,
+                },
+            )
+            entry["chunk_count"] += 1
+            if meta.get("visibility") == "teacher_only":
+                entry["teacher_only_chunks"] += 1
+            else:
+                entry["student_safe_chunks"] += 1
+            if meta.get("approved") is not True:
+                entry["approved"] = False
+        return sorted(grouped.values(), key=lambda item: item["knowledge_version"])

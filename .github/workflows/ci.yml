@@ -20,14 +20,16 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: module3-ai-agent/requirements.txt
+          cache-dependency-path: |
+            module3-ai-agent/requirements.txt
+            module3-ai-agent/requirements-dev.txt
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
           pip install ruff
       - name: Lint (real errors only - syntax, undefined names, unused imports)
-        run: ruff check --select E9,F app scripts tests
+        run: ruff check --select E9,F app scripts tests agent
       - name: Release checks (static)
         run: python scripts/release_check.py
       # Offline suite: the Gemini API is faked, integration tests are deselected by pytest.ini.
@@ -61,7 +63,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: pip-audit (direct requirements)
+      # chromadb 0.5.23: PYSEC-2026-3813/3814/3815 have NO fixed release upstream yet (pip-audit reports no fix
+      # version), so they are ignored explicitly and ONLY by ID. Remove the --ignore-vuln flags once a fixed chromadb
+      # exists. Every other finding (runtime or dev/test tooling) still fails this job.
+      - name: pip-audit (direct requirements, runtime + dev)
         run: |
           pip install pip-audit
-          pip-audit -r requirements.txt --no-deps --disable-pip
+          pip-audit -r requirements.txt -r requirements-dev.txt --no-deps --disable-pip \
+            --ignore-vuln PYSEC-2026-3813 --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815

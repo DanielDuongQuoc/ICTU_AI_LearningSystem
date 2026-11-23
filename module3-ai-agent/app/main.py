@@ -22,10 +22,12 @@ from app.api.grading import router as grading_router
 from app.api.rag import router as rag_router
 from app.api.rubrics import router as rubrics_router
 from app.api.submissions import router as submissions_router
+from app.api.agent_h12 import router as agent_h12_router
 
 
 async def _close_shared_clients(logger: logging.Logger) -> None:
-    """Close the shared httpx clients (LLM + embedding) if they were ever created."""
+    """Close shared httpx clients (LLM, embedding, HTTP LCMS) if they were ever created."""
+    from app.h12_agent.lcms_tools import close_lcms_tool_client
     from app.services import embedding_service, llm_service
 
     for name, service in (
@@ -38,6 +40,11 @@ async def _close_shared_clients(logger: logging.Logger) -> None:
             await service.close()
         except Exception as exc:  # shutdown must never raise
             logger.warning("Closing %s HTTP client failed: %s", name, exc)
+
+    try:
+        await close_lcms_tool_client()
+    except Exception as exc:  # shutdown must never raise
+        logger.warning("Closing h12_lcms HTTP client failed: %s", exc)
 
 
 @asynccontextmanager
@@ -109,8 +116,19 @@ def create_app() -> FastAPI:
             allow_origins=settings.cors_origins,
             allow_credentials=False,
             allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-            allow_headers=["Content-Type", "Accept", "X-Request-ID"],
-            expose_headers=["X-Request-ID"],
+            allow_headers=[
+                "Content-Type",
+                "Accept",
+                "X-Request-ID",
+                "X-Agent-Service-Key",
+                "Idempotency-Key",
+            ],
+            expose_headers=[
+                "X-Request-ID",
+                "X-AI-Adapter-Mode",
+                "X-AI-Framework",
+                "X-Idempotent-Replay",
+            ],
         )
     app.include_router(health_router)
     app.include_router(metrics_router)
@@ -121,6 +139,7 @@ def create_app() -> FastAPI:
     app.include_router(rubrics_router)
     app.include_router(grading_router)
     app.include_router(submissions_router)
+    app.include_router(agent_h12_router)
     register_exception_handlers(app)
     install_openapi(app)
     return app
