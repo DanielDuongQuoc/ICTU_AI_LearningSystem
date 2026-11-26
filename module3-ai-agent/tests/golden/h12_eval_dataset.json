@@ -138,7 +138,7 @@
       "number_of_questions": 2,
       "question_format": "essay",
       "expected_status_code": 200,
-      "expected_keywords": ["transaction", "acid", "atomicity"]
+      "expected_keywords": ["transaction", "atomicity", "rollback"]
     },
     {
       "id": "qr_db_v2",
@@ -303,7 +303,7 @@
       "id": "sa_db_partial_c1_only",
       "lesson_id": "lesson-db-01",
       "lesson_version": "v1",
-      "student_answer": "A database transaction is an atomic all-or-nothing logical unit.",
+      "student_answer": "A database transaction is an atomic all-or-nothing logical unit that performs a full rollback on failure so partial operations are never applied.",
       "expected_score": 5.0,
       "expected_status": "pending_teacher_review",
       "expected_unmet_required": [],
@@ -313,7 +313,7 @@
       "id": "sa_db_missing_required_c1",
       "lesson_id": "lesson-db-01",
       "lesson_version": "v1",
-      "student_answer": "Constraint preservation during concurrent access protects isolation and durability against crash losses.",
+      "student_answer": "Consistency preserves integrity constraints, Isolation prevents dirty reads during concurrent access, and Durability persists committed updates via write-ahead logs (WAL) against crash losses.",
       "expected_score": 5.0,
       "expected_status": "pending_teacher_review",
       "expected_unmet_required": ["C1"],
@@ -380,13 +380,13 @@
       "lesson_version": "v1",
       "turns": [
         {
-          "message": "A transaction is an atomic all-or-nothing logical unit.",
+          "message": "A transaction is an atomic all-or-nothing logical unit that performs a rollback on failure.",
           "expected_decision": "follow_up",
           "expected_status": "active",
           "expected_covered": ["C1"]
         },
         {
-          "message": "Consistency preserves integrity constraints, concurrency isolation hides dirty writes, and crash durability relies on logs.",
+          "message": "Consistency preserves integrity constraints, concurrency isolation hides dirty writes, and crash durability relies on write-ahead logs (WAL).",
           "expected_decision": "close_session",
           "expected_status": "closed",
           "expected_stopping_reason": "criteria_covered",

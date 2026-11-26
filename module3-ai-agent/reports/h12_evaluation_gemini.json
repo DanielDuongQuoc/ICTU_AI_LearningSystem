@@ -1,0 +1,255 @@
+{
+  "generated_at": "2026-11-26T11:39:08+00:00",
+  "dataset_version": "1.0.0",
+  "adapter_mode": "live",
+  "is_mock": false,
+  "lcms_transport": "http-simulator-camelCase",
+  "lesson_count": 4,
+  "elapsed_s": 147.36,
+  "zero_silent_grade_publication": true,
+  "zero_answer_key_leakage": true,
+  "overall_passed": true,
+  "criteria": {
+    "question_relevance": {
+      "passed": 6,
+      "total": 6,
+      "pass_rate": 1.0,
+      "threshold": 0.9,
+      "met": true,
+      "cases": [
+        {
+          "id": "qr_db_v1",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "qr_db_v2",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "qr_se_v1",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "qr_net_v1",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "qr_reject_mcq",
+          "passed": true,
+          "http_status": 422
+        },
+        {
+          "id": "qr_reject_quiz",
+          "passed": true,
+          "http_status": 422
+        }
+      ]
+    },
+    "lesson_grounding": {
+      "passed": 6,
+      "total": 6,
+      "pass_rate": 1.0,
+      "threshold": 1.0,
+      "met": true,
+      "cases": [
+        {
+          "id": "lg_db_v1",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "lg_db_v2",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "lg_se_v1",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "lg_net_v1",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "lg_unapproved_lesson",
+          "passed": true,
+          "http_status": 422
+        },
+        {
+          "id": "lg_insufficient_context",
+          "passed": true,
+          "http_status": 200
+        }
+      ]
+    },
+    "rubric_coverage": {
+      "passed": 4,
+      "total": 4,
+      "pass_rate": 1.0,
+      "threshold": 1.0,
+      "met": true,
+      "cases": [
+        {
+          "id": "rc_db_v1",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "rc_se_v1",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "rc_net_v1",
+          "passed": true,
+          "http_status": 200
+        },
+        {
+          "id": "rc_understanding_db_v1",
+          "passed": true,
+          "http_status": 200
+        }
+      ]
+    },
+    "scoring_agreement": {
+      "passed": 8,
+      "total": 8,
+      "pass_rate": 1.0,
+      "mae": 0.0,
+      "mae_threshold": 1.5,
+      "status_agreement": 1.0,
+      "status_agreement_threshold": 0.9,
+      "met": true,
+      "cases": [
+        {
+          "id": "sa_db_full",
+          "passed": true,
+          "abs_error": 0.0,
+          "status_ok": true
+        },
+        {
+          "id": "sa_db_partial_c1_only",
+          "passed": true,
+          "abs_error": 0.0,
+          "status_ok": true
+        },
+        {
+          "id": "sa_db_missing_required_c1",
+          "passed": true,
+          "abs_error": 0.0,
+          "status_ok": true
+        },
+        {
+          "id": "sa_db_empty",
+          "passed": true,
+          "abs_error": 0.0,
+          "status_ok": true
+        },
+        {
+          "id": "sa_db_copy_question",
+          "passed": true,
+          "abs_error": 0.0,
+          "status_ok": true
+        },
+        {
+          "id": "sa_db_injection",
+          "passed": true,
+          "abs_error": 0.0,
+          "status_ok": true
+        },
+        {
+          "id": "sa_se_full",
+          "passed": true,
+          "abs_error": 0.0,
+          "status_ok": true
+        },
+        {
+          "id": "sa_net_full",
+          "passed": true,
+          "abs_error": 0.0,
+          "status_ok": true
+        }
+      ]
+    },
+    "understanding_followup_quality": {
+      "passed": 6,
+      "total": 6,
+      "pass_rate": 1.0,
+      "threshold": 0.9,
+      "security_pass_rate": 1.0,
+      "security_threshold": 1.0,
+      "met": true,
+      "cases": [
+        {
+          "id": "uf_db_converges",
+          "type": "adaptive_convergence",
+          "passed": true
+        },
+        {
+          "id": "uf_net_converges",
+          "type": "adaptive_convergence",
+          "passed": true
+        },
+        {
+          "id": "uf_max_turns",
+          "type": "max_turns_reached",
+          "passed": true
+        },
+        {
+          "id": "uf_student_closure",
+          "type": "student_requested_closure",
+          "passed": true
+        },
+        {
+          "id": "uf_sec_redirect",
+          "type": "security_pi34",
+          "passed": true
+        },
+        {
+          "id": "uf_sec_reveal_and_alter_escalation",
+          "type": "security_pi34_escalation",
+          "passed": true
+        }
+      ]
+    },
+    "failure_handling": {
+      "passed": 6,
+      "total": 6,
+      "pass_rate": 1.0,
+      "threshold": 1.0,
+      "met": true,
+      "cases": [
+        {
+          "id": "fh_cross_session_isolation",
+          "passed": true
+        },
+        {
+          "id": "fh_classroom_exam_denial",
+          "passed": true
+        },
+        {
+          "id": "fh_voice_oral_rejection",
+          "passed": true
+        },
+        {
+          "id": "fh_malformed_model_json_recovery",
+          "passed": true
+        },
+        {
+          "id": "fh_lcms_unavailable_and_auth",
+          "passed": true
+        },
+        {
+          "id": "fh_idempotency_replay_and_conflict",
+          "passed": true
+        }
+      ]
+    }
+  }
+}

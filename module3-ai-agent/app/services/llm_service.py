@@ -525,6 +525,8 @@ class GeminiLLMService(LLMService):
                 )
                 if backoff > 0:
                     await asyncio.sleep(backoff)
+                    if len(tried_keys) >= self._key_pool.size:
+                        tried_keys.clear()
                 continue
             break
 

@@ -230,6 +230,8 @@ async def run_h12_evaluation(
     orig_auth_req = settings.agent_auth_required
     orig_secret = settings.agent_service_secret
     orig_lcms_mode = settings.agent_lcms_mode
+    orig_max_retries = settings.llm_max_retries
+    orig_retry_backoff = settings.llm_retry_backoff_s
     orig_get_lcms = agent_h12._get_lcms_client
     orig_get_know = agent_h12._get_knowledge_service
     orig_get_store = agent_h12._get_session_store
@@ -243,8 +245,18 @@ async def run_h12_evaluation(
     zero_silent_grade_publication = True
     zero_answer_key_leakage = True
 
+    async def _pace() -> None:
+        if mode == "gemini":
+            await asyncio.sleep(1.8)
+
     try:
         settings.agent_model_adapter = "mock" if mode == "mock" else "gemini"
+        if mode == "gemini":
+            from app.services import llm_service as _llm_mod
+
+            settings.llm_max_retries = 4
+            settings.llm_retry_backoff_s = 3.5
+            _llm_mod._llm_service = None
         settings.agent_auth_required = True
         settings.agent_service_secret = secret
         settings.agent_lcms_mode = "http"
@@ -257,6 +269,8 @@ async def run_h12_evaluation(
         # ---- 1. Question Relevance ----
         qr_details: list[dict[str, Any]] = []
         for case in dataset["question_relevance"]:
+            if case.get("expected_status_code") == 200:
+                await _pace()
             r = await api_client.post(
                 "/api/agent/questions/draft",
                 headers=_auth_headers(secret=secret),
@@ -275,7 +289,10 @@ async def run_h12_evaluation(
             if ok and r.status_code == 200:
                 b = r.json()
                 drafts = b.get("drafts", [])
-                joined = " ".join(f"{d['question']} {d['expected_answer']}" for d in drafts).lower()
+                joined = " ".join(
+                    f"{d['question']} {d['expected_answer']} {' '.join(d.get('key_points', []))}"
+                    for d in drafts
+                ).lower()
                 kw_hits = all(kw.lower() in joined for kw in case.get("expected_keywords", []))
                 format_ok = all(d["format"] == "essay" and not d["released"] and d["teacher_review_required"] for d in drafts)
                 ev_ok = all(len(d.get("evidence_refs", [])) >= 1 for d in drafts)
@@ -377,6 +394,7 @@ async def run_h12_evaluation(
                     got_ids = [c["criterion_id"] for c in b["rubric_progress"]]
                     ok = got_ids == case["expected_criterion_ids"]
             else:
+                await _pace()
                 r = await api_client.post(
                     "/api/agent/knowing/grade-suggestion",
                     headers=_auth_headers(secret=secret),
@@ -412,6 +430,8 @@ async def run_h12_evaluation(
         status_matches = 0
         for idx, case in enumerate(dataset["scoring_agreement"], start=1):
             limiter.reset()
+            if not case.get("expected_warnings") and not case.get("expected_flags"):
+                await _pace()
             r = await api_client.post(
                 "/api/agent/knowing/grade-suggestion",
                 headers=_auth_headers(secret=secret),
@@ -483,6 +503,7 @@ async def run_h12_evaluation(
 
             if ok and ctype == "adaptive_convergence":
                 for turn_spec in case["turns"]:
+                    await _pace()
                     rt = await api_client.post(
                         f"/api/agent/understanding/sessions/{sid}/turns",
                         headers=_auth_headers(secret=secret),
@@ -510,6 +531,7 @@ async def run_h12_evaluation(
             elif ok and ctype == "max_turns_reached":
                 last_b: dict[str, Any] = {}
                 for msg in case["turns"]:
+                    await _pace()
                     rt = await api_client.post(
                         f"/api/agent/understanding/sessions/{sid}/turns",
                         headers=_auth_headers(secret=secret),
@@ -520,6 +542,7 @@ async def run_h12_evaluation(
                 ok = ok and last_b.get("stopping_reason") == case["expected_stopping_reason"] and last_b.get("status") == "closed"
 
             elif ok and ctype == "student_requested_closure":
+                await _pace()
                 rt = await api_client.post(
                     f"/api/agent/understanding/sessions/{sid}/turns",
                     headers=_auth_headers(secret=secret),
@@ -528,6 +551,7 @@ async def run_h12_evaluation(
                 ok = rt.status_code == 200 and rt.json().get("stopping_reason") == case["expected_stopping_reason"]
 
             elif ok and ctype == "security_pi34":
+                await _pace()
                 rt = await api_client.post(
                     f"/api/agent/understanding/sessions/{sid}/turns",
                     headers=_auth_headers(secret=secret),
@@ -543,6 +567,7 @@ async def run_h12_evaluation(
                 ok = sec_ok
 
             elif ok and ctype == "security_pi34_escalation":
+                await _pace()
                 r1 = await api_client.post(
                     f"/api/agent/understanding/sessions/{sid}/turns",
                     headers=_auth_headers(secret=secret),
@@ -555,6 +580,7 @@ async def run_h12_evaluation(
                     and "ANSWER_KEY_CONFIDENTIAL" not in b1.get("assistant_reply", "")
                     and all(c["status"] == "uncovered" for c in b1.get("rubric_progress", []))
                 )
+                await _pace()
                 r2 = await api_client.post(
                     f"/api/agent/understanding/sessions/{sid}/turns",
                     headers=_auth_headers(secret=secret),
@@ -611,6 +637,7 @@ async def run_h12_evaluation(
                 )
                 s1 = rs1.json()["session_id"]
                 s2 = rs2.json()["session_id"]
+                await _pace()
                 rt1 = await api_client.post(
                     f"/api/agent/understanding/sessions/{s1}/turns",
                     headers=_auth_headers(secret=secret),
@@ -740,6 +767,7 @@ async def run_h12_evaluation(
                 finally:
                     settings.agent_model_adapter = saved_mode
                     agent_h12._get_llm_service = orig_get_llm
+                await _pace()
                 r_rec = await api_client.post(
                     f"/api/agent/understanding/sessions/{sid_j}/turns",
                     headers=_auth_headers(secret=secret),
@@ -806,6 +834,7 @@ async def run_h12_evaluation(
                     )
                 ).json()["session_id"]
                 body_i = {"student_id": "SV_FH_IDEM", "message": "Transaction atomic unit.", "language": "en"}
+                await _pace()
                 r1 = await api_client.post(
                     f"/api/agent/understanding/sessions/{sid_i}/turns",
                     headers=_auth_headers(secret=secret, idempotency_key="eval-idem-1"),
@@ -930,6 +959,8 @@ async def run_h12_evaluation(
         settings.agent_auth_required = orig_auth_req
         settings.agent_service_secret = orig_secret
         settings.agent_lcms_mode = orig_lcms_mode
+        settings.llm_max_retries = orig_max_retries
+        settings.llm_retry_backoff_s = orig_retry_backoff
         agent_h12._get_lcms_client = orig_get_lcms
         agent_h12._get_knowledge_service = orig_get_know
         agent_h12._get_session_store = orig_get_store

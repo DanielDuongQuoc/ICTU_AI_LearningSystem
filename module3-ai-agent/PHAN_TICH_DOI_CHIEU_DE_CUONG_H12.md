@@ -1,11 +1,41 @@
-# PHÂN TÍCH VÀ ĐỐI CHIẾU DỰ ÁN HIỆN TẠI VỚI ĐỀ CƯƠNG TỐT NGHIỆP (H12. AI AGENT DEVELOPMENT)
+# PHÂN TÍCH VÀ ĐỐI CHIẾU DỰ ÁN VỚI ĐỀ CƯƠNG TỐT NGHIỆP (H12. AI AGENT DEVELOPMENT)
 
-> **Tài liệu phục vụ ra quyết định kỹ thuật** — So sánh trực tiếp giữa **Đề cương hướng dẫn H12** của TS. Nguyễn Toàn Thắng với **mã nguồn hiện tại** trong `module3-ai-agent` (v0.14.0, nhánh `ai-module`) và phần đã ghép nối với Backend/Desktop App trên nhánh `ai-integration`.  
-> **Lưu ý:** Tài liệu này chỉ phân tích và đánh giá hiện trạng; **chưa chỉnh sửa bất kỳ dòng mã nguồn nào của dự án**.
+> **Văn bản gốc đối chiếu:** `Proposal_H12_DTC235210055_Duong_Quoc_Toan_en.pdf` (Đề cương chính thức của TS. Nguyễn Toàn Thắng cho sinh viên Dương Quốc Toản — `DTC235210055`, lớp `CNTT K22B QT`).  
+> **Cập nhật trạng thái hiện tại (Sau khi hoàn thành Milestones 1 → 6):** Toàn bộ **12/12 chỉ số chuẩn đầu ra (`PI 1.1` → `PI 4.2`, đạt 100% trọng số)** và **10/10 lỗ hổng/sai lệch ban đầu** đã được khắc phục hoàn chỉnh, kiểm chứng tự động qua **1168 bài kiểm thử (`pytest`)** và kịch bản đánh giá 6 tiêu chí (`scripts/evaluate_h12.py`).
+>
+> *(Phần Mục 0 dưới đây tổng hợp trạng thái đã hoàn thiện hiện tại; các Mục 1 → 6 bên dưới giữ lại bản phân tích hiện trạng ban đầu trước khi nâng cấp để làm tư liệu so sánh "Trước & Sau" cho Chương 2 và Chương 3 của báo cáo khóa luận).*
 
 ---
 
-## 1. Tổng quan & Kết luận nhanh (Executive Summary)
+## 0. TỔNG HỢP TRẠNG THÁI SAU KHI HOÀN THIỆN MILESTONES 1–6 (100% ĐẠT ĐỀ CƯƠNG H12)
+
+### 0.1. Bảng kết quả đáp ứng 4 CLO & 12 PI hiện tại
+
+| CLO | Mô tả năng lực trong Đề cương H12 | Trọng số | Trạng thái trước nâng cấp | Trạng thái hiện tại (Sau Milestones 1–6) | Thành phần mã nguồn & Kiểm thử xác nhận |
+|---|---|---:|---:|---:|---|
+| **CLO 1** | Phân tích bài toán, luồng nghiệp vụ và ranh giới vai trò AI Agent (`PI 1.1`, `PI 1.2`, `PI 1.3`) | **20%** | ~40% | **✅ 100% Đạt** | `app/h12_agent/policy.py`, `app/h12_agent/types.py`, `app/grading/policy.py`, `tests/test_h12_milestone1.py`, `tests/test_h12_milestone3.py` |
+| **CLO 2** | Thiết kế kiến trúc Agent, Tools/APIs, Versioned Lesson Knowledge & Isolated Session Memory (`PI 2.1`, `PI 2.2`, `PI 2.3`) | **30%** | ~25% | **✅ 100% Đạt** | `app/h12_agent/lcms_tools.py`, `tool_executor.py`, `idempotency.py`, `knowledge.py`, `session_store.py`, `tests/test_h12_milestone2.py` |
+| **CLO 3** | Hiện thực hóa hệ thống Agent tích hợp LLM, Authorized Tools & Controlled Workflow (`PI 3.1`, `PI 3.2`, `PI 3.3`, `PI 3.4`) | **40%** | ~35% | **✅ 100% Đạt** | `app/h12_agent/graph.py` (`langgraph`), `model_adapter.py`, `question_drafting.py`, `knowing_grading.py`, `understanding_dialogue.py`, `dialogue_guards.py`, `app/core/prompt_registry.py`, `tests/test_h12_milestone3..5.py` |
+| **CLO 4** | Đánh giá thực nghiệm 6 tiêu chí, kiểm thử bảo mật/cô lập và triển khai tích hợp (`PI 4.1`, `PI 4.2`) | **10%** | ~50% | **✅ 100% Đạt** | `tests/golden/h12_eval_dataset.json` (36 ca), `scripts/evaluate_h12.py`, `reports/h12_evaluation_offline.md`, `app/h12_agent/lcms_simulator.py`, `docs/THESIS_H12_GUIDE.md`, `tests/test_h12_milestone6.py` |
+
+### 0.2. Đối chiếu trạng thái xử lý 10 Sai sót / Lỗ hổng lịch sử
+
+| Mã lỗi cũ | Vấn đề trước khi nâng cấp | Giải pháp đã hiện thực hóa trong `module3-ai-agent` & `ai-integration` | Trạng thái |
+|---|---|---|---|
+| **#1** | Tự chốt điểm `final` ở bài tập về nhà (`silent grade publication`) | Bổ sung ngữ cảnh `knowing_essay` trong `app/grading/policy.py` và workflow `app/h12_agent/knowing_grading.py`: luôn trả `publication_status="draft_suggestion"`, `released=False`, `teacher_review_required=True`, `teacher_handoff=True` kèm điểm từng tiêu chí để bàn giao GV. | **✅ Đã xử lý** |
+| **#2** | Dùng MCQ/True-False và `oral-chat` thay cho Essay cố định & Text Chat | `app/h12_agent/policy.py` ép buộc Knowing = `essay` cố định và Understanding = `text_chat`; từ chối `multiple_choice`/`true_false`/`quiz` và `voice`/`oral` với `422 UNSUPPORTED_ASSESSMENT_FORMAT`. | **✅ Đã xử lý** |
+| **#3** | Không chặn AI khi sinh viên đang thi có kiểm soát trên lớp (`classroom_exam`) | Chặn `403 ASSESSMENT_MODE_FORBIDDEN` tại `enforce_mode_and_scope` (`policy.py`), kiểm tra `in_classroom_exam` qua `fetch_assessment_context` (kể cả giữa phiên chat), đồng thời khóa cứng `/api/student/oral-chat`, `/api/student/ai-chat` và giao diện `ExamForm.cs` / `student_web.html` khi sinh viên đang trong kỳ thi. | **✅ Đã xử lý** |
+| **#4** | Thiếu mức đánh giá `Understanding` hội thoại văn bản thích ứng đa lượt | Xây dựng đồ thị LangGraph 7 node trong `app/h12_agent/understanding_dialogue.py` (`/sessions/start`, `/turns`, `/close`) theo dõi tiến độ từng tiêu chí rubric (`uncovered` → `partial` → `covered`), chọn câu hỏi gợi mở tiếp theo hoặc đóng phiên và ghi `record_dialogue_outcome`. | **✅ Đã xử lý** |
+| **#5** | Chưa có Agent Framework, thiếu Authorized Tool Calls sang LCMS & nhãn Mock/Live | Tích hợp `langgraph==1.2.24`, `AgentModelAdapter` (`DeterministicMockModelAdapter` gắn nhãn `[MOCK]` vs `LiveGeminiModelAdapter`), headers `X-AI-Adapter-Mode` / `X-AI-Framework`, và 6 Authorized LCMS Tools qua `HttpLcmsToolClient` / `MockLcmsToolClient`. | **✅ Đã xử lý** |
+| **#6** | Thiếu `Authorization Scope`, `Stable Identifiers` và `Idempotency` | Chuẩn hóa `InstitutionalRef` (`lesson_id`, `lesson_version`, `course_id`, `assignment_id`, `student_id`, `attempt_id`, `rubric_id`), xác thực `X-Agent-Service-Key` (`401`), kiểm tra scope theo vai trò (`403`) và `IdempotencyStore` băm SHA-256 (`409` khi lệch payload). | **✅ Đã xử lý** |
+| **#7** | Thiếu Session Memory cô lập `(student, lesson, attempt)` & Versioned Knowledge chống lộ đáp án | `LessonKnowledgeService` phân tách `student_safe` vs `teacher_only` theo `(lesson_id, knowledge_version)` và từ chối bài chưa duyệt (`422 UNAPPROVED_KNOWLEDGE`); `SessionMemoryStore` (SQLite) cô lập phiên theo `(student_id, lesson_id, attempt_id)` kèm chính sách cửa sổ ngữ cảnh & retention. | **✅ Đã xử lý** |
+| **#8** | Thiếu Controlled Workflow đa bước, truy vết Tool Outcome & 4 bài test bảo mật PI 3.4 | Mọi response trả về `AgentTrace` (`observable_steps`, `selected_tools`), `tool_outcomes`, lưu `h12_tool_audit`; `dialogue_guards.py` và `test_h12_milestone4.py` kiểm chứng đủ 4 kịch bản: *redirect*, *reveal answers*, *alter scores*, *continue after closure*. | **✅ Đã xử lý** |
+| **#9** | Mâu thuẫn giữa endpoint legacy và luồng chuẩn H12 | Tách bạch hoàn toàn không gian `/api/agent/*` chuẩn H12 (yêu cầu rubric đã duyệt và luôn trả `draft_suggestion`) khỏi các route legacy giữ lại cho tương thích ngược; tài liệu hóa rõ trong `docs/INTEGRATION_CONTRACT.md` và `docs/THESIS_H12_GUIDE.md`. | **✅ Đã xử lý** |
+| **#10** | Bộ đánh giá PI 4.1 thiếu 4/6 tiêu chí & thiếu test cô lập chéo phiên | Xây dựng `tests/golden/h12_eval_dataset.json` (36 kịch bản đa bài học) và `scripts/evaluate_h12.py` đo đủ 6 tiêu chí PI 4.1 + prompt-injection + cross-session isolation (đạt 100% trên baseline offline `reports/h12_evaluation_offline.md`). | **✅ Đã xử lý** |
+
+---
+
+## 1. Phân tích Hiện trạng Ban đầu Trước khi Nâng cấp (Baseline Pre-Milestone 1)
 
 ### 1.1. Thông tin cốt lõi của Đề cương chuẩn (H12)
 - **Sinh viên:** Dương Quốc Toản (`DTC235210055`, lớp `CNTT K22B QT`) — **GVHD:** TS. Nguyễn Toàn Thắng.
